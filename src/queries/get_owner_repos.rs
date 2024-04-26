@@ -2,6 +2,7 @@ use super::PaginatedQuery;
 use crate::config::PAGE_SIZE;
 use crate::types::{Connection, Cursor, Ided, JsonMap, Page, RepoDetails};
 use indoc::indoc;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::{self, Write};
 
@@ -70,7 +71,9 @@ impl PaginatedQuery for GetOwnerRepos {
                 ) {{
                     nodes {{
                         id
-                        owner
+                        owner {{
+                            login
+                        }}
                         name
                     }}
                     pageInfo {{
@@ -104,11 +107,38 @@ impl PaginatedQuery for GetOwnerRepos {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<Self::Item>, serde_json::Error> {
-        let raw: Connection<Ided<RepoDetails>> = serde_json::from_value(value)?;
+        let raw: Connection<Ided<RawRepoDetails>> = serde_json::from_value(value)?;
         Ok(Page {
-            items: raw.nodes,
+            items: raw
+                .nodes
+                .into_iter()
+                .map(|Ided { id, data }| Ided {
+                    id,
+                    data: RepoDetails::from(data),
+                })
+                .collect(),
             end_cursor: raw.page_info.end_cursor,
             has_next_page: raw.page_info.has_next_page,
         })
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+struct RawRepoDetails {
+    owner: RepositoryOwner,
+    name: String,
+}
+
+impl From<RawRepoDetails> for RepoDetails {
+    fn from(value: RawRepoDetails) -> RepoDetails {
+        RepoDetails {
+            owner: value.owner.login,
+            name: value.name,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+struct RepositoryOwner {
+    login: String,
 }
