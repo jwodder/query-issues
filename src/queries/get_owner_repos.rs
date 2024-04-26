@@ -94,7 +94,10 @@ impl PaginatedQuery for GetOwnerRepos {
     }
 
     fn variable_types(&self) -> HashMap<String, String> {
-        todo!()
+        HashMap::from([
+            (self.owner_varname(), String::from("String!")),
+            (self.cursor_varname(), String::from("String")),
+        ])
     }
 
     fn parse_response(

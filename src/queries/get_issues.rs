@@ -103,7 +103,10 @@ impl PaginatedQuery for GetIssues {
     }
 
     fn variable_types(&self) -> HashMap<String, String> {
-        todo!()
+        HashMap::from([
+            (self.repo_id_varname(), String::from("ID!")),
+            (self.cursor_varname(), String::from("String")),
+        ])
     }
 
     fn parse_response(
