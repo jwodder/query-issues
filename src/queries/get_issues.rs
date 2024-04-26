@@ -2,6 +2,7 @@ use super::PaginatedQuery;
 use crate::config::PAGE_SIZE;
 use crate::types::{Connection, Cursor, Id, Ided, Issue, JsonMap, Page};
 use indoc::indoc;
+use std::collections::HashMap;
 use std::fmt::{self, Write};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -45,11 +46,15 @@ impl PaginatedQuery for GetIssues {
         self.alias = Some(alias);
     }
 
-    fn set_cursor(&mut self, cursor: Cursor) {
-        self.cursor = Some(cursor);
+    fn get_cursor(&self) -> Option<Cursor> {
+        self.cursor.clone()
     }
 
-    fn write_graphql(&self, s: &mut String) -> fmt::Result {
+    fn set_cursor(&mut self, cursor: Option<Cursor>) {
+        self.cursor = cursor;
+    }
+
+    fn write_graphql<W: Write>(&self, mut s: W) -> fmt::Result {
         if let Some(ref alias) = self.alias {
             write!(s, "{alias}: ")?;
         }
@@ -95,6 +100,10 @@ impl PaginatedQuery for GetIssues {
         vars.insert(self.repo_id_varname(), self.repo_id.clone().into());
         vars.insert(self.cursor_varname(), self.cursor.clone().into());
         vars
+    }
+
+    fn variable_types(&self) -> HashMap<String, String> {
+        todo!()
     }
 
     fn parse_response(

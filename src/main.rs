@@ -30,8 +30,7 @@ fn main() -> anyhow::Result<()> {
     eprintln!("[·] Fetching repositories …");
     let owner_queries = OWNERS
         .iter()
-        .map(|owner| (owner, GetOwnerRepos::new(owner.to_string())))
-        .collect();
+        .map(|owner| (owner, GetOwnerRepos::new(owner.to_string())));
     let start = Instant::now();
     let repomap = client.batch_paginate(owner_queries)?;
     let elapsed = start.elapsed();
