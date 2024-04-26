@@ -2,7 +2,7 @@ use crate::queries::GetIssues;
 use crate::types::{Cursor, Id, Ided, Issue, IssueState, RepoDetails};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::collections::{btree_map::Entry, BTreeMap};
+use std::collections::{btree_map::Entry, BTreeMap, HashMap};
 use std::fmt;
 use std::io;
 
@@ -21,6 +21,10 @@ impl Database {
             .write_all(b"\n")
             .context("failed to append newline to database dump")?;
         Ok(())
+    }
+
+    pub(crate) fn get_mut(&mut self, repo_id: &Id) -> Option<&mut Repository> {
+        self.0.get_mut(repo_id)
     }
 
     pub(crate) fn update_repositories<I>(&mut self, iter: I) -> RepoDiff
@@ -53,23 +57,38 @@ impl Database {
         report
     }
 
-    pub(crate) fn issue_queries(&self) -> impl Iterator<Item = GetIssues> + '_ {
+    pub(crate) fn issue_queries(&self) -> HashMap<Id, GetIssues> {
         self.0
             .iter()
-            .map(|(id, repo)| GetIssues::new(id.clone(), repo.issue_cursor.clone()))
+            .map(|(id, repo)| {
+                (
+                    id.clone(),
+                    GetIssues::new(id.clone(), repo.issue_cursor.clone()),
+                )
+            })
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub(crate) struct Repository {
+    details: RepoDetails,
+    issue_cursor: Option<Cursor>,
+    issues: BTreeMap<Id, Issue>,
+}
+
+impl Repository {
+    pub(crate) fn set_issue_cursor(&mut self, cursor: Option<Cursor>) {
+        self.issue_cursor = cursor;
     }
 
-    pub(crate) fn update_issues<I>(&mut self, repo_id: Id, issues: I) -> IssueDiff
+    pub(crate) fn update_issues<I>(&mut self, issues: I) -> IssueDiff
     where
         I: IntoIterator<Item = Ided<Issue>>,
     {
         let mut report = IssueDiff::default();
-        let Some(repo) = self.0.get_mut(&repo_id) else {
-            // TODO: Warn? Error?
-            return report;
-        };
         for Ided { id, data } in issues {
-            match repo.issues.entry(id) {
+            match self.issues.entry(id) {
                 Entry::Occupied(o) if data.state == IssueState::Closed => {
                     report.closed += 1;
                     o.remove();
@@ -89,13 +108,6 @@ impl Database {
         }
         report
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-struct Repository {
-    details: RepoDetails,
-    issue_cursor: Option<Cursor>,
-    issues: BTreeMap<Id, Issue>,
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
@@ -129,5 +141,13 @@ impl fmt::Display for IssueDiff {
             "{} issues added, {} issues modified, {} issues closed",
             self.added, self.modified, self.closed
         )
+    }
+}
+
+impl std::ops::AddAssign for IssueDiff {
+    fn add_assign(&mut self, rhs: IssueDiff) {
+        self.added += rhs.added;
+        self.modified += rhs.modified;
+        self.closed += rhs.closed;
     }
 }

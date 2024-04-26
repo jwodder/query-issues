@@ -9,14 +9,14 @@ use ureq::{Agent, AgentBuilder};
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
 
 #[derive(Clone, Debug)]
-pub(crate) struct GitHub {
-    client: Agent,
+pub(crate) struct Client {
+    inner: Agent,
 }
 
-impl GitHub {
-    pub(crate) fn new(token: &str) -> GitHub {
+impl Client {
+    pub(crate) fn new(token: &str) -> Client {
         let auth = format!("Bearer {token}");
-        let client = AgentBuilder::new()
+        let inner = AgentBuilder::new()
             .https_only(true)
             .middleware(move |req: ureq::Request, next: ureq::MiddlewareNext<'_>| {
                 next.handle(
@@ -25,12 +25,12 @@ impl GitHub {
                 )
             })
             .build();
-        GitHub { client }
+        Client { inner }
     }
 
     pub(crate) fn query(&self, query: String, variables: JsonMap) -> anyhow::Result<JsonMap> {
         let r = self
-            .client
+            .inner
             .post(GRAPHQL_API_URL)
             .send_json(Payload { query, variables })
             .context("failed to perform GraphQL request")?
@@ -60,7 +60,7 @@ impl GitHub {
     pub(crate) fn batch_paginate<K, Q: PaginatedQuery>(
         &self,
         queries: HashMap<K, Q>,
-    ) -> anyhow::Result<HashMap<K, (Vec<Q::Item>, Cursor)>> {
+    ) -> anyhow::Result<HashMap<K, (Vec<Q::Item>, Option<Cursor>)>> {
         todo!()
     }
 }

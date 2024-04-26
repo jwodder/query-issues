@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) type JsonMap = serde_json::Map<String, serde_json::Value>;
 
-#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub(crate) struct Id(String);
 
