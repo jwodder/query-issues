@@ -21,9 +21,11 @@ struct Arguments {
 
 fn main() -> anyhow::Result<()> {
     let args = Arguments::parse();
-    eprintln!("[·] Loading {:#} …", args.infile);
     let mut db = match args.infile.open() {
-        Ok(fp) => Database::load(fp)?,
+        Ok(fp) => {
+            eprintln!("[·] Loading {:#} …", args.infile);
+            Database::load(fp)?
+        }
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Database::default(),
         Err(e) => return Err(e.into()),
     };
