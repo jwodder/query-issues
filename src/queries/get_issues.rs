@@ -65,7 +65,7 @@ impl PaginatedQuery for GetIssues {
             node(id: ${repo_id_varname}) {{
                 ... on Repository {{
                     issues(
-                        first: ${page_size},
+                        first: {page_size},
                         after: ${cursor_varname},
                         orderBy: {{field: UPDATED_AT, direction: ASC}},
                         states: [{states}],
