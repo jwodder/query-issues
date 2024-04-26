@@ -62,16 +62,15 @@ impl Client {
     pub(crate) fn batch_paginate<K, Q, I>(
         &self,
         queries: I,
-    ) -> anyhow::Result<HashMap<K, (Vec<Q::Item>, Option<Cursor>)>>
+    ) -> anyhow::Result<Vec<PaginationResults<K, Q::Item>>>
     where
-        K: Eq + std::hash::Hash,
         Q: PaginatedQuery,
         I: IntoIterator<Item = (K, Q)>,
     {
         let mut query_queue = queries.into_iter();
         let mut next_alias_index = 0;
         let mut active = HashMap::new();
-        let mut results = HashMap::new();
+        let mut results = Vec::new();
         loop {
             let open_slots = BATCH_SIZE.saturating_sub(active.len());
             for _ in 0..open_slots {
@@ -116,8 +115,7 @@ impl Client {
                     continue;
                 };
                 if !aqo.get_mut().process_response(value)? {
-                    let q = aqo.remove();
-                    results.insert(q.key, (q.items, q.query.get_cursor()));
+                    results.push(PaginationResults::from(aqo.remove()));
                 }
             }
         }
@@ -170,5 +168,22 @@ impl<K, Q: PaginatedQuery> ActiveQuery<K, Q> {
         self.items.extend(page.items);
         self.query.set_cursor(page.end_cursor);
         Ok(page.has_next_page)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct PaginationResults<K, T> {
+    pub(crate) key: K,
+    pub(crate) items: Vec<T>,
+    pub(crate) end_cursor: Option<Cursor>,
+}
+
+impl<K, Q: PaginatedQuery> From<ActiveQuery<K, Q>> for PaginationResults<K, Q::Item> {
+    fn from(value: ActiveQuery<K, Q>) -> Self {
+        PaginationResults {
+            key: value.key,
+            items: value.items,
+            end_cursor: value.query.get_cursor(),
+        }
     }
 }
