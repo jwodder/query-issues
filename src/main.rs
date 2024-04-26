@@ -22,7 +22,11 @@ struct Arguments {
 fn main() -> anyhow::Result<()> {
     let args = Arguments::parse();
     eprintln!("[·] Loading {:#} …", args.infile);
-    let mut db = Database::load(args.infile.open()?)?;
+    let mut db = match args.infile.open() {
+        Ok(fp) => Database::load(fp)?,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Database::default(),
+        Err(e) => return Err(e.into()),
+    };
 
     let token = gh_token::get().context("unable to fetch GitHub access token")?;
     let client = Client::new(&token);
