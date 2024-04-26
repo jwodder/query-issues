@@ -1,3 +1,4 @@
+use crate::queries::GetIssues;
 use crate::types::{Cursor, Id, Ided, Issue, IssueState, RepoDetails};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
@@ -52,12 +53,11 @@ impl Database {
         report
     }
 
-    /*
-    pub(crate) fn issue_queries(&self) -> impl Iterator<Item=GetIssues> + '_ {
-        self.0.iter()
+    pub(crate) fn issue_queries(&self) -> impl Iterator<Item = GetIssues> + '_ {
+        self.0
+            .iter()
             .map(|(id, repo)| GetIssues::new(id.clone(), repo.issue_cursor.clone()))
     }
-    */
 
     pub(crate) fn update_issues<I>(&mut self, repo_id: Id, issues: I) -> IssueDiff
     where

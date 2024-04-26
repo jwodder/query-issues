@@ -6,6 +6,12 @@ pub(crate) type JsonMap = serde_json::Map<String, serde_json::Value>;
 #[serde(transparent)]
 pub(crate) struct Id(String);
 
+impl From<Id> for serde_json::Value {
+    fn from(value: Id) -> serde_json::Value {
+        value.0.into()
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
 pub(crate) struct Cursor(String);

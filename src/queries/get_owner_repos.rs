@@ -23,13 +23,13 @@ impl GetOwnerRepos {
     fn owner_varname(&self) -> String {
         match self.alias {
             Some(ref alias) => format!("{alias}_owner"),
-            None => self.owner.clone(),
+            None => String::from("owner"),
         }
     }
 
     fn cursor_varname(&self) -> String {
-        match self.alias.as_ref() {
-            Some(alias) => format!("{alias}_cursor"),
+        match self.alias {
+            Some(ref alias) => format!("{alias}_cursor"),
             None => String::from("cursor"),
         }
     }
