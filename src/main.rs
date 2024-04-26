@@ -1,5 +1,6 @@
 mod client;
 mod config;
+mod db;
 mod queries;
 mod types;
 use crate::client::*;

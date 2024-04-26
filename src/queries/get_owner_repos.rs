@@ -1,6 +1,6 @@
 use super::PaginatedQuery;
 use crate::config::PAGE_SIZE;
-use crate::types::{Connection, Cursor, Id, IdPair, JsonMap, Page, RepoDetails};
+use crate::types::{Connection, Cursor, Ided, JsonMap, Page, RepoDetails};
 use indoc::indoc;
 use std::fmt::{self, Write};
 
@@ -36,7 +36,7 @@ impl GetOwnerRepos {
 }
 
 impl PaginatedQuery for GetOwnerRepos {
-    type Item = (Id, RepoDetails);
+    type Item = Ided<RepoDetails>;
 
     fn set_alias(&mut self, alias: String) {
         self.alias = Some(alias);
@@ -92,9 +92,9 @@ impl PaginatedQuery for GetOwnerRepos {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<Self::Item>, serde_json::Error> {
-        let raw: Connection<IdPair<RepoDetails>> = serde_json::from_value(value)?;
+        let raw: Connection<Ided<RepoDetails>> = serde_json::from_value(value)?;
         Ok(Page {
-            items: raw.nodes.into_iter().map(Into::into).collect(),
+            items: raw.nodes,
             end_cursor: raw.page_info.end_cursor,
             has_next_page: raw.page_info.has_next_page,
         })

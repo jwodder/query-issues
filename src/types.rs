@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 pub(crate) type JsonMap = serde_json::Map<String, serde_json::Value>;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub(crate) struct Id(String);
 
@@ -17,16 +17,10 @@ impl From<Cursor> for serde_json::Value {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(crate) struct IdPair<T> {
-    id: Id,
+pub(crate) struct Ided<T> {
+    pub(crate) id: Id,
     #[serde(flatten)]
-    inner: T,
-}
-
-impl<T> From<IdPair<T>> for (Id, T) {
-    fn from(value: IdPair<T>) -> (Id, T) {
-        (value.id, value.inner)
-    }
+    pub(crate) data: T,
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -54,4 +48,22 @@ pub(crate) struct PageInfo {
 pub(crate) struct RepoDetails {
     pub(crate) owner: String,
     pub(crate) name: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub(crate) struct Issue {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    //pub(crate) author: String,
+    // Note: Reportedly, the max number of labels on an issue is 100
+    //pub(crate) labels: Vec<String>,
+    pub(crate) state: IssueState,
+    pub(crate) url: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "UPPERCASE")]
+pub(crate) enum IssueState {
+    Open,
+    Closed,
 }
