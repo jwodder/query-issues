@@ -166,7 +166,12 @@ impl<K, Q: PaginatedQuery> ActiveQuery<K, Q> {
     fn process_response(&mut self, value: serde_json::Value) -> Result<bool, serde_json::Error> {
         let page = self.query.parse_response(value)?;
         self.items.extend(page.items);
-        self.query.set_cursor(page.end_cursor);
+        if page.end_cursor.is_some() {
+            // endCursor is null when the page has no items, which happens when
+            // the current cursor is already at the end, so don't update the
+            // cursor to null.
+            self.query.set_cursor(page.end_cursor);
+        }
         Ok(page.has_next_page)
     }
 }
