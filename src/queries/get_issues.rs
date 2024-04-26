@@ -2,6 +2,7 @@ use super::PaginatedQuery;
 use crate::config::PAGE_SIZE;
 use crate::types::{Connection, Cursor, Id, Ided, Issue, JsonMap, Page};
 use indoc::indoc;
+use serde::Deserialize;
 use std::collections::HashMap;
 use std::fmt::{self, Write};
 
@@ -113,11 +114,16 @@ impl PaginatedQuery for GetIssues {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<Self::Item>, serde_json::Error> {
-        let raw: Connection<Ided<Issue>> = serde_json::from_value(value)?;
+        let raw = serde_json::from_value::<Response>(value)?;
         Ok(Page {
-            items: raw.nodes,
-            end_cursor: raw.page_info.end_cursor,
-            has_next_page: raw.page_info.has_next_page,
+            items: raw.issues.nodes,
+            end_cursor: raw.issues.page_info.end_cursor,
+            has_next_page: raw.issues.page_info.has_next_page,
         })
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+struct Response {
+    issues: Connection<Ided<Issue>>,
 }

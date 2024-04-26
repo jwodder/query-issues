@@ -107,9 +107,10 @@ impl PaginatedQuery for GetOwnerRepos {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<Self::Item>, serde_json::Error> {
-        let raw: Connection<Ided<RawRepoDetails>> = serde_json::from_value(value)?;
+        let raw = serde_json::from_value::<Response>(value)?;
         Ok(Page {
             items: raw
+                .repositories
                 .nodes
                 .into_iter()
                 .map(|Ided { id, data }| Ided {
@@ -117,10 +118,15 @@ impl PaginatedQuery for GetOwnerRepos {
                     data: RepoDetails::from(data),
                 })
                 .collect(),
-            end_cursor: raw.page_info.end_cursor,
-            has_next_page: raw.page_info.has_next_page,
+            end_cursor: raw.repositories.page_info.end_cursor,
+            has_next_page: raw.repositories.page_info.has_next_page,
         })
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+struct Response {
+    repositories: Connection<Ided<RawRepoDetails>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
