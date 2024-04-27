@@ -95,10 +95,10 @@ impl Repository {
         for Ided { id, data } in issues {
             match self.issues.entry(id) {
                 Entry::Occupied(o) if data.state == IssueState::Closed => {
-                    report.closed += 1;
+                    report.open_closed += 1;
                     o.remove();
                 }
-                Entry::Vacant(_) if data.state == IssueState::Closed => (),
+                Entry::Vacant(_) if data.state == IssueState::Closed => report.already_closed += 1,
                 Entry::Occupied(mut o) => {
                     if o.get() != &data {
                         report.modified += 1;
@@ -137,15 +137,16 @@ impl fmt::Display for RepoDiff {
 pub(crate) struct IssueDiff {
     added: usize,
     modified: usize,
-    closed: usize,
+    open_closed: usize,
+    already_closed: usize,
 }
 
 impl fmt::Display for IssueDiff {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} issues added, {} issues modified, {} issues closed",
-            self.added, self.modified, self.closed
+            "{} issues added, {} issues modified, {} open issues closed, {} issues already closed",
+            self.added, self.modified, self.open_closed, self.already_closed
         )
     }
 }
@@ -154,6 +155,7 @@ impl std::ops::AddAssign for IssueDiff {
     fn add_assign(&mut self, rhs: IssueDiff) {
         self.added += rhs.added;
         self.modified += rhs.modified;
-        self.closed += rhs.closed;
+        self.open_closed += rhs.open_closed;
+        self.already_closed += rhs.already_closed;
     }
 }
