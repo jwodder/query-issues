@@ -1,28 +1,16 @@
-[package]
-name = "orgs-with-issues"
-version = "0.1.0-dev"
+[workspace]
+members = ["crates/*"]
+resolver = "2"
+
+[workspace.package]
 edition = "2021"
 rust-version = "1.77"
-description = "Attempt at efficiently fetching open GitHub issues via GraphQL"
-authors = ["John Thorvald Wodder II <orgs-with-issues@varonathe.org>"]
-repository = "https://github.com/jwodder/orgs-with-issues"
-documentation = "https://github.com/jwodder/orgs-with-issues"
+authors = ["John Thorvald Wodder II <query-issues@varonathe.org>"]
+repository = "https://github.com/jwodder/query-issues"
 license = "MIT"
-keywords = []
-# See <https://crates.io/category_slugs> for a list of categories
-categories = []
-exclude = ["/.*"]
+publish = false
 
-[dependencies]
-anyhow = "1.0.82"
-gh-token = "0.1.7"
-indenter = "0.3.3"
-indoc = "2.0.5"
-serde = { version = "1.0.198", features = ["derive"] }
-serde_json = "1.0.116"
-ureq = { version = "2.9.7", features = ["json"] }
-
-[lints.rust]
+[workspace.lints.rust]
 # Lint groups:
 future_incompatible = { level = "deny", priority = -1 }
 rust_2018_idioms = { level = "deny", priority = -1 }
@@ -101,7 +89,17 @@ unused_comparisons = "deny"
 useless_ptr_null_checks = "deny"
 while_true = "deny"
 
-[lints.clippy]
+[workspace.lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+invalid_codeblock_attributes = "deny"
+invalid_html_tags = "deny"
+invalid_rust_codeblocks = "deny"
+private_intra_doc_links = "deny"
+redundant_explicit_links = "deny"
+unescaped_backticks = "deny"
+
+[workspace.lints.clippy]
 # Deny all warn-by-default lints:
 all = { level = "deny", priority = -1 }
 
