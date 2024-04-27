@@ -2,7 +2,7 @@ use crate::queries::GetIssues;
 use crate::types::{Cursor, Id, Ided, Issue, IssueState, RepoDetails};
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
-use std::collections::{btree_map::Entry, BTreeMap, HashMap};
+use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
 use std::io;
 
@@ -57,16 +57,13 @@ impl Database {
         report
     }
 
-    pub(crate) fn issue_queries(&self) -> HashMap<Id, GetIssues> {
-        self.0
-            .iter()
-            .map(|(id, repo)| {
-                (
-                    id.clone(),
-                    GetIssues::new(id.clone(), repo.issue_cursor.clone()),
-                )
-            })
-            .collect()
+    pub(crate) fn issue_queries(&self) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
+        self.0.iter().map(|(id, repo)| {
+            (
+                id.clone(),
+                GetIssues::new(id.clone(), repo.issue_cursor.clone()),
+            )
+        })
     }
 }
 

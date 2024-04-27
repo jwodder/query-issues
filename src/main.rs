@@ -47,9 +47,8 @@ fn main() -> anyhow::Result<()> {
     eprintln!("[·] {rdiff}");
 
     eprintln!("[·] Fetching issues …");
-    let issue_queries = db.issue_queries();
     let start = Instant::now();
-    let issues = client.batch_paginate(issue_queries)?;
+    let issues = client.batch_paginate(db.issue_queries())?;
     let elapsed = start.elapsed();
     let qty: usize = issues.iter().map(|pr| pr.items.len()).sum();
     eprintln!("[·] Fetched {qty} issues in {elapsed:?}");
