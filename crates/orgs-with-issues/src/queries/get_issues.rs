@@ -1,6 +1,6 @@
-use super::PaginatedQuery;
 use crate::config::PAGE_SIZE;
-use crate::types::{Cursor, Id, Issue, Page, RawRepoDetails, RepoWithIssues, Variable};
+use crate::types::{Issue, RawRepoDetails, RepoWithIssues};
+use gqlclient::{Cursor, Id, Page, PaginatedQuery, Variable};
 use indoc::indoc;
 use std::collections::HashMap;
 use std::fmt::{self, Write};

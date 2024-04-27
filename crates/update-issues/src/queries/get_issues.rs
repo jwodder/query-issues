@@ -1,6 +1,6 @@
-use super::PaginatedQuery;
 use crate::config::PAGE_SIZE;
-use crate::types::{Connection, Cursor, Id, Ided, Issue, Page, Variable};
+use crate::types::Issue;
+use gqlclient::{Connection, Cursor, Id, Ided, Page, PaginatedQuery, Variable};
 use indoc::indoc;
 use serde::Deserialize;
 use std::collections::HashMap;

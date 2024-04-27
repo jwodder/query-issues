@@ -1,6 +1,7 @@
 use crate::queries::GetIssues;
-use crate::types::{Cursor, Id, Ided, Issue, IssueState, RepoDetails};
+use crate::types::{Issue, IssueState, RepoDetails};
 use anyhow::Context;
+use gqlclient::{Cursor, Id, Ided};
 use serde::{Deserialize, Serialize};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;

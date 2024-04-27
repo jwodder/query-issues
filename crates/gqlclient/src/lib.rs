@@ -1,6 +1,7 @@
-use crate::config::BATCH_SIZE;
-use crate::queries::PaginatedQuery;
-use crate::types::{Cursor, JsonMap, Variable};
+mod pquery;
+mod types;
+pub use crate::pquery::PaginatedQuery;
+pub use crate::types::*;
 use anyhow::Context;
 use indenter::indented;
 use serde::{Deserialize, Serialize};
@@ -10,13 +11,15 @@ use ureq::{Agent, AgentBuilder};
 
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
 
+const BATCH_SIZE: usize = 50;
+
 #[derive(Clone, Debug)]
-pub(crate) struct Client {
+pub struct Client {
     inner: Agent,
 }
 
 impl Client {
-    pub(crate) fn new(token: &str) -> Client {
+    pub fn new(token: &str) -> Client {
         let auth = format!("Bearer {token}");
         let inner = AgentBuilder::new()
             .https_only(true)
@@ -30,7 +33,7 @@ impl Client {
         Client { inner }
     }
 
-    pub(crate) fn query(&self, query: String, variables: JsonMap) -> anyhow::Result<JsonMap> {
+    pub fn query(&self, query: String, variables: JsonMap) -> anyhow::Result<JsonMap> {
         let r = self
             .inner
             .post(GRAPHQL_API_URL)
@@ -59,7 +62,7 @@ impl Client {
         }
     }
 
-    pub(crate) fn batch_paginate<K, Q, I>(
+    pub fn batch_paginate<K, Q, I>(
         &self,
         queries: I,
     ) -> anyhow::Result<Vec<PaginationResults<K, Q::Item>>>
@@ -174,10 +177,10 @@ impl<K, Q: PaginatedQuery> ActiveQuery<K, Q> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct PaginationResults<K, T> {
-    pub(crate) key: K,
-    pub(crate) items: Vec<T>,
-    pub(crate) end_cursor: Option<Cursor>,
+pub struct PaginationResults<K, T> {
+    pub key: K,
+    pub items: Vec<T>,
+    pub end_cursor: Option<Cursor>,
 }
 
 impl<K, Q: PaginatedQuery> From<ActiveQuery<K, Q>> for PaginationResults<K, Q::Item> {

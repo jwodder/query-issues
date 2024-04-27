@@ -1,11 +1,10 @@
-mod client;
 mod config;
 mod queries;
 mod types;
-use crate::client::Client;
 use crate::config::OWNERS;
 use crate::queries::{GetIssues, GetOwnerRepos};
 use anyhow::Context;
+use gqlclient::Client;
 use std::time::Instant;
 
 fn main() -> anyhow::Result<()> {

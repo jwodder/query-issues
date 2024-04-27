@@ -1,14 +1,13 @@
-mod client;
 mod config;
 mod db;
 mod queries;
 mod types;
-use crate::client::{Client, PaginationResults};
 use crate::config::OWNERS;
 use crate::db::{Database, IssueDiff};
 use crate::queries::GetOwnerRepos;
 use anyhow::Context;
 use clap::Parser;
+use gqlclient::{Client, PaginationResults};
 use itertools::Itertools;
 use patharg::{InputArg, OutputArg};
 use std::time::Instant;

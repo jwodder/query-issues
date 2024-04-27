@@ -1,9 +1,9 @@
 [package]
-name = "orgs-with-issues"
+name = "gqlclient"
 version = "0.1.0-dev"
 edition.workspace = true
 rust-version.workspace = true
-description = "Attempt at efficiently fetching open GitHub issues via GraphQL"
+description = "Common code for querying the GitHub GraphQL API"
 authors.workspace = true
 repository.workspace = true
 license.workspace = true
@@ -11,12 +11,10 @@ publish.workspace = true
 
 [dependencies]
 anyhow = "1.0.82"
-gh-token = "0.1.7"
-gqlclient = { path = "../gqlclient" }
 indenter = "0.3.3"
-indoc = "2.0.5"
 serde = { version = "1.0.198", features = ["derive"] }
 serde_json = "1.0.116"
+ureq = { version = "2.9.7", features = ["json"] }
 
 [lints]
 workspace = true
