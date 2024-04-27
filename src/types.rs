@@ -54,6 +54,7 @@ pub(crate) struct PageInfo {
 pub(crate) struct RepoDetails {
     pub(crate) owner: String,
     pub(crate) name: String,
+    pub(crate) open_issues: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

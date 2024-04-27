@@ -75,6 +75,9 @@ impl PaginatedQuery for GetOwnerRepos {
                             login
                         }}
                         name
+                        issues (states: [OPEN]) {{
+                            totalCount
+                        }}
                     }}
                     pageInfo {{
                         endCursor
@@ -133,6 +136,7 @@ struct Response {
 struct RawRepoDetails {
     owner: RepositoryOwner,
     name: String,
+    issues: Issues,
 }
 
 impl From<RawRepoDetails> for RepoDetails {
@@ -140,6 +144,7 @@ impl From<RawRepoDetails> for RepoDetails {
         RepoDetails {
             owner: value.owner.login,
             name: value.name,
+            open_issues: value.issues.total_count,
         }
     }
 }
@@ -147,4 +152,10 @@ impl From<RawRepoDetails> for RepoDetails {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct RepositoryOwner {
     login: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct Issues {
+    total_count: u64,
 }

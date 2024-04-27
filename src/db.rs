@@ -37,6 +37,11 @@ impl Database {
             if let Some(mut repo) = self.0.remove(&id) {
                 if repo.details != data {
                     report.modified += 1;
+                    if data.open_issues == 0 {
+                        report.closed_issues += repo.issues.len();
+                        repo.issue_cursor = None;
+                        repo.issues.clear();
+                    }
                     repo.details = data;
                 }
                 newmap.insert(id, repo);
@@ -58,12 +63,15 @@ impl Database {
     }
 
     pub(crate) fn issue_queries(&self) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
-        self.0.iter().map(|(id, repo)| {
-            (
-                id.clone(),
-                GetIssues::new(id.clone(), repo.issue_cursor.clone()),
-            )
-        })
+        self.0
+            .iter()
+            .filter(|(_, repo)| repo.details.open_issues != 0)
+            .map(|(id, repo)| {
+                (
+                    id.clone(),
+                    GetIssues::new(id.clone(), repo.issue_cursor.clone()),
+                )
+            })
     }
 }
 
@@ -112,14 +120,15 @@ pub(crate) struct RepoDiff {
     added: usize,
     modified: usize,
     deleted: usize,
+    closed_issues: usize,
 }
 
 impl fmt::Display for RepoDiff {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "{} repositories added, {} repositories modified, {} repositories deleted",
-            self.added, self.modified, self.deleted
+            "{} repositories added, {} repositories modified, {} repositories deleted, {} issues bulk closed",
+            self.added, self.modified, self.deleted, self.closed_issues
         )
     }
 }
