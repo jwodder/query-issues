@@ -33,6 +33,8 @@ fn main() -> anyhow::Result<()> {
     let token = gh_token::get().context("unable to fetch GitHub access token")?;
     let client = Client::new(&token);
 
+    let big_start = Instant::now();
+
     eprintln!("[·] Fetching repositories …");
     let owner_queries = OWNERS
         .iter()
@@ -68,6 +70,8 @@ fn main() -> anyhow::Result<()> {
         idiff += repo.update_issues(items);
     }
     eprintln!("[·] {idiff}");
+
+    eprintln!("[·] Total fetch time: {:?}", big_start.elapsed());
 
     let outfile = match (args.outfile, args.infile) {
         (Some(f), _) => f,
