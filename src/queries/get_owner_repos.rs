@@ -73,7 +73,7 @@ impl PaginatedQuery for GetOwnerRepos {
                         id
                         nameWithOwner
                         issues(
-                            first: $page_size,
+                            first: {page_size},
                             orderBy: {{field: CREATED_AT, direction: ASC}},
                             states: [OPEN],
                         ) {{
