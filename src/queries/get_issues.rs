@@ -28,7 +28,7 @@ impl GetIssues {
     fn repo_id_varname(&self) -> String {
         match self.alias {
             Some(ref alias) => format!("{alias}_repo_id"),
-            None => String::from("owner"),
+            None => String::from("repo_id"),
         }
     }
 
