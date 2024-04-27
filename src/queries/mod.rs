@@ -2,7 +2,7 @@ mod get_issues;
 mod get_owner_repos;
 pub(crate) use self::get_issues::GetIssues;
 pub(crate) use self::get_owner_repos::GetOwnerRepos;
-use crate::types::{Cursor, JsonMap, Page};
+use crate::types::{Cursor, Page, Variable};
 use std::collections::HashMap;
 
 pub(crate) trait PaginatedQuery {
@@ -12,8 +12,7 @@ pub(crate) trait PaginatedQuery {
     fn get_cursor(&self) -> Option<Cursor>;
     fn set_cursor(&mut self, cursor: Option<Cursor>);
     fn write_graphql<W: std::fmt::Write>(&self, s: W) -> std::fmt::Result;
-    fn variables(&self) -> JsonMap;
-    fn variable_types(&self) -> HashMap<String, String>;
+    fn variables(&self) -> HashMap<String, Variable>;
     fn parse_response(
         &self,
         value: serde_json::Value,

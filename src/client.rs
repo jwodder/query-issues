@@ -1,6 +1,6 @@
 use crate::config::BATCH_SIZE;
 use crate::queries::PaginatedQuery;
-use crate::types::{Cursor, JsonMap};
+use crate::types::{Cursor, JsonMap, Variable};
 use anyhow::Context;
 use indenter::indented;
 use serde::{Deserialize, Serialize};
@@ -87,19 +87,16 @@ impl Client {
             }
 
             let mut variables = JsonMap::new();
-            let mut var_types = HashMap::new();
-            for quy in active.values() {
-                variables.extend(quy.query.variables());
-                var_types.extend(quy.query.variable_types());
-            }
-
             let mut qstr = String::from("query(");
             let mut first = true;
-            for (name, ty) in var_types {
-                if !std::mem::take(&mut first) {
-                    write!(&mut qstr, ", ")?;
+            for quy in active.values() {
+                for (name, Variable { gql_type, value }) in quy.query.variables() {
+                    if !std::mem::take(&mut first) {
+                        write!(&mut qstr, ", ")?;
+                    }
+                    write!(&mut qstr, "${name}: {gql_type}")?;
+                    variables.insert(name, value);
                 }
-                write!(&mut qstr, "${name}: {ty}")?;
             }
             writeln!(&mut qstr, ") {{")?;
             for quy in active.values() {

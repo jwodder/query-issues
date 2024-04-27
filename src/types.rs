@@ -74,3 +74,9 @@ pub(crate) enum IssueState {
     Open,
     Closed,
 }
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct Variable {
+    pub(crate) gql_type: String,
+    pub(crate) value: serde_json::Value,
+}

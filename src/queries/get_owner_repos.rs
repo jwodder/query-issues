@@ -1,6 +1,6 @@
 use super::PaginatedQuery;
 use crate::config::PAGE_SIZE;
-use crate::types::{Connection, Cursor, Ided, JsonMap, Page, RepoDetails};
+use crate::types::{Connection, Cursor, Ided, Page, RepoDetails, Variable};
 use indoc::indoc;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -92,17 +92,22 @@ impl PaginatedQuery for GetOwnerRepos {
         )
     }
 
-    fn variables(&self) -> JsonMap {
-        let mut vars = JsonMap::new();
-        vars.insert(self.owner_varname(), self.owner.clone().into());
-        vars.insert(self.cursor_varname(), self.cursor.clone().into());
-        vars
-    }
-
-    fn variable_types(&self) -> HashMap<String, String> {
+    fn variables(&self) -> HashMap<String, Variable> {
         HashMap::from([
-            (self.owner_varname(), String::from("String!")),
-            (self.cursor_varname(), String::from("String")),
+            (
+                self.owner_varname(),
+                Variable {
+                    gql_type: String::from("String!"),
+                    value: self.owner.clone().into(),
+                },
+            ),
+            (
+                self.cursor_varname(),
+                Variable {
+                    gql_type: String::from("String"),
+                    value: self.cursor.clone().into(),
+                },
+            ),
         ])
     }
 
