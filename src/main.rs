@@ -50,10 +50,11 @@ fn main() -> anyhow::Result<()> {
 
     eprintln!("[·] Fetching issues …");
     let start = Instant::now();
-    let issues = client.batch_paginate(db.issue_queries())?;
+    let mut repo_qty = 0;
+    let issues = client.batch_paginate(db.issue_queries().inspect(|_| repo_qty += 1))?;
     let elapsed = start.elapsed();
     let qty: usize = issues.iter().map(|pr| pr.items.len()).sum();
-    eprintln!("[·] Fetched {qty} issues in {elapsed:?}");
+    eprintln!("[·] Fetched {qty} issues from {repo_qty} repositories in {elapsed:?}");
 
     let mut idiff = IssueDiff::default();
     for PaginationResults {
