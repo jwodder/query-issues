@@ -12,7 +12,7 @@ publish.workspace = true
 [dependencies]
 anyhow = "1.0.82"
 gh-token = "0.1.7"
-gqlclient = { path = "../gqlclient" }
+gqlient = { path = "../gqlient" }
 indenter = "0.3.3"
 indoc = "2.0.5"
 serde = { version = "1.0.198", features = ["derive"] }

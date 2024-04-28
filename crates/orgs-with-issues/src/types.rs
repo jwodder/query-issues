@@ -1,4 +1,4 @@
-use gqlclient::{Connection, Cursor};
+use gqlient::{Connection, Cursor};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

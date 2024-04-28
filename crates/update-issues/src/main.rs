@@ -7,7 +7,7 @@ use crate::db::{Database, IssueDiff};
 use crate::queries::GetOwnerRepos;
 use anyhow::Context;
 use clap::Parser;
-use gqlclient::{Client, PaginationResults};
+use gqlient::{Client, PaginationResults};
 use itertools::Itertools;
 use patharg::{InputArg, OutputArg};
 use std::time::Instant;

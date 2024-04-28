@@ -158,7 +158,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "gqlclient"
+name = "gqlient"
 version = "0.1.0-dev"
 dependencies = [
  "anyhow",
@@ -275,7 +275,7 @@ version = "0.1.0-dev"
 dependencies = [
  "anyhow",
  "gh-token",
- "gqlclient",
+ "gqlient",
  "indenter",
  "indoc",
  "serde",
@@ -519,7 +519,7 @@ dependencies = [
  "anyhow",
  "clap",
  "gh-token",
- "gqlclient",
+ "gqlient",
  "indenter",
  "indoc",
  "itertools",

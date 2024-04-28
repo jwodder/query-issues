@@ -1,5 +1,5 @@
 [package]
-name = "gqlclient"
+name = "gqlient"
 version = "0.1.0-dev"
 edition.workspace = true
 rust-version.workspace = true
