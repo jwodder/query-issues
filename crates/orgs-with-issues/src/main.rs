@@ -10,6 +10,7 @@ use std::time::Instant;
 fn main() -> anyhow::Result<()> {
     let token = gh_token::get().context("unable to fetch GitHub access token")?;
     let client = Client::new(&token);
+    let start_rate_limit = client.get_rate_limit()?;
 
     let start = Instant::now();
     let mut repo_qty = 0;
@@ -41,5 +42,13 @@ fn main() -> anyhow::Result<()> {
         repo_qty,
         start.elapsed()
     );
+
+    let end_rate_limit = client.get_rate_limit()?;
+    if let Some(used) = end_rate_limit.used_since(start_rate_limit) {
+        println!("Used {used} rate limit points");
+    } else {
+        println!("Could not determine rate limit points used due to intervening reset");
+    }
+
     Ok(())
 }

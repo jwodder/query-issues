@@ -31,6 +31,7 @@ fn main() -> anyhow::Result<()> {
 
     let token = gh_token::get().context("unable to fetch GitHub access token")?;
     let client = Client::new(&token);
+    let start_rate_limit = client.get_rate_limit()?;
 
     let big_start = Instant::now();
 
@@ -72,6 +73,13 @@ fn main() -> anyhow::Result<()> {
     eprintln!("[·] {idiff}");
 
     eprintln!("[·] Total fetch time: {:?}", big_start.elapsed());
+
+    let end_rate_limit = client.get_rate_limit()?;
+    if let Some(used) = end_rate_limit.used_since(start_rate_limit) {
+        println!("Used {used} rate limit points");
+    } else {
+        println!("Could not determine rate limit points used due to intervening reset");
+    }
 
     let outfile = match (args.outfile, args.infile) {
         (Some(f), _) => f,

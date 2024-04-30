@@ -10,6 +10,7 @@ use std::fmt::Write;
 use ureq::{Agent, AgentBuilder};
 
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
+static RATE_LIMIT_URL: &str = "https://api.github.com/rate_limit";
 
 const BATCH_SIZE: usize = 50;
 
@@ -31,6 +32,20 @@ impl Client {
             })
             .build();
         Client { inner }
+    }
+
+    pub fn get_rate_limit(&self) -> anyhow::Result<RateLimit> {
+        let r = self
+            .inner
+            .get(RATE_LIMIT_URL)
+            .call()
+            .context("failed to perform rate limit request")?
+            .into_json::<RateLimitResponse>()
+            .context("failed to deserialize rate limit response")?;
+        Ok(RateLimit {
+            used: r.resources.graphql.used,
+            reset: r.resources.graphql.reset,
+        })
     }
 
     pub fn query(&self, query: String, variables: JsonMap) -> anyhow::Result<JsonMap> {
@@ -173,6 +188,36 @@ impl<K, Q: PaginatedQuery> ActiveQuery<K, Q> {
             self.query.set_cursor(page.end_cursor);
         }
         Ok(page.has_next_page)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+struct RateLimitResponse {
+    resources: RateLimitResources,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+struct RateLimitResources {
+    graphql: RateLimitEntry,
+}
+
+#[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq)]
+struct RateLimitEntry {
+    used: u32,
+    reset: u64,
+}
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
+pub struct RateLimit {
+    used: u32,
+    reset: u64,
+}
+
+impl RateLimit {
+    // Returns `None` if a reset happened in between the fetching of the two
+    // rate limit values
+    pub fn used_since(self, since: RateLimit) -> Option<u32> {
+        (self.reset == since.reset).then(|| self.used.saturating_sub(since.used))
     }
 }
 
