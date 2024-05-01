@@ -1,5 +1,5 @@
 use crate::config::PAGE_SIZE;
-use crate::types::{Issue, RawRepoDetails, RepoWithIssues};
+use crate::types::{Issue, RepoWithIssues};
 use gqlient::{Cursor, Id, Page, PaginatedQuery, Variable};
 use indoc::indoc;
 use std::collections::HashMap;
@@ -109,7 +109,7 @@ impl PaginatedQuery for GetIssues {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<Self::Item>, serde_json::Error> {
-        let raw = RepoWithIssues::from(serde_json::from_value::<RawRepoDetails>(value)?);
+        let raw = serde_json::from_value::<RepoWithIssues>(value)?;
         Ok(Page {
             items: raw.issues,
             end_cursor: raw.issue_cursor,

@@ -2,6 +2,7 @@ use gqlient::{Connection, Cursor};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(from = "RawRepoDetails")]
 pub(crate) struct RepoWithIssues {
     pub(crate) issues: Vec<Issue>,
     pub(crate) issue_cursor: Option<Cursor>,
@@ -9,28 +10,10 @@ pub(crate) struct RepoWithIssues {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(crate) struct Issue {
-    pub(crate) repo: String,
-    pub(crate) number: u64,
-    pub(crate) title: String,
-    //pub(crate) author: String,
-    // Note: Reportedly, the max number of labels on an issue is 100
-    //pub(crate) labels: Vec<String>,
-    pub(crate) url: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(crate) struct RawIssue {
-    pub(crate) number: u64,
-    pub(crate) title: String,
-    pub(crate) url: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-pub(crate) struct RawRepoDetails {
-    pub(crate) name_with_owner: String,
-    pub(crate) issues: Connection<RawIssue>,
+struct RawRepoDetails {
+    name_with_owner: String,
+    issues: Connection<RawIssue>,
 }
 
 impl From<RawRepoDetails> for RepoWithIssues {
@@ -51,4 +34,22 @@ impl From<RawRepoDetails> for RepoWithIssues {
             has_more_issues: value.issues.page_info.has_next_page,
         }
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(crate) struct Issue {
+    pub(crate) repo: String,
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    //pub(crate) author: String,
+    // Note: Reportedly, the max number of labels on an issue is 100
+    //pub(crate) labels: Vec<String>,
+    pub(crate) url: String,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(crate) struct RawIssue {
+    pub(crate) number: u64,
+    pub(crate) title: String,
+    pub(crate) url: String,
 }
