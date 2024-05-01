@@ -1,0 +1,22 @@
+[package]
+name = "orgs-then-issues"
+version = "0.1.0-dev"
+edition.workspace = true
+rust-version.workspace = true
+description = "Attempt at efficiently fetching open GitHub issues via GraphQL"
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+anyhow = "1.0.82"
+gh-token = "0.1.7"
+gqlient = { path = "../gqlient" }
+indenter = "0.3.3"
+indoc = "2.0.5"
+serde = { version = "1.0.198", features = ["derive"] }
+serde_json = "1.0.116"
+
+[lints]
+workspace = true

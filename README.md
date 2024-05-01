@@ -4,11 +4,21 @@ repositories belonging to a collection of owners/organizations.
 
 The strategies implemented by the binaries in this workspace are as follows:
 
+- `orgs-then-issues` — Performs a paginated query to fetch all (public etc.)
+  repositories belonging to each of the owners in question, including getting
+  the number of open issues in each one.  Then, all repositories that have one
+  or more open issues are queried in batches to get paginated lists of their
+  open issues.
+
 - `orgs-with-issues` — Performs a paginated batch query to fetch all (public
   etc.) repositories belonging to each of the owners in question; for each
   repository, the first page of open issues is also queried at the same time.
   Then, all repositories that still have more open issues are queried
   repeatedly in batches to get their remaining pages of open isses.
+
+  The key difference from `orgs-then-issues` is that this program fetches a
+  page of issues for each repository as part of the same request(s) that fetch
+  the repositories themselves.
 
 - `update-issues` — This binary creates or updates a JSON database of open
   issues on each run and only makes requests for issues that have been updated
