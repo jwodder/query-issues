@@ -3,7 +3,6 @@ use crate::types::RepoWithIssues;
 use gqlient::{Cursor, Ided, Page, Paginator, Query, Variable};
 use indoc::indoc;
 use serde::Deserialize;
-use std::collections::HashMap;
 use std::fmt::{self, Write};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -114,8 +113,8 @@ impl Query for GetOwnerReposQuery {
         )
     }
 
-    fn variables(&self) -> HashMap<String, Variable> {
-        HashMap::from([
+    fn variables(&self) -> [(String, Variable); 2] {
+        [
             (
                 self.owner_varname(),
                 Variable {
@@ -130,7 +129,7 @@ impl Query for GetOwnerReposQuery {
                     value: self.cursor.clone().into(),
                 },
             ),
-        ])
+        ]
     }
 
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Item, serde_json::Error> {

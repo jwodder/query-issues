@@ -1,12 +1,11 @@
 use crate::types::{Cursor, Page, Variable};
-use std::collections::HashMap;
 
 pub trait Query: Sized {
     type Item;
 
     fn with_alias(self, alias: String) -> Self;
     fn write_graphql<W: std::fmt::Write>(&self, s: W) -> std::fmt::Result;
-    fn variables(&self) -> HashMap<String, Variable>;
+    fn variables(&self) -> impl IntoIterator<Item = (String, Variable)>;
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Item, serde_json::Error>;
 }
 

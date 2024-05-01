@@ -2,7 +2,6 @@ use crate::config::PAGE_SIZE;
 use crate::types::{Issue, RepoWithIssues};
 use gqlient::{Cursor, Id, Page, Paginator, Query, Variable};
 use indoc::indoc;
-use std::collections::HashMap;
 use std::fmt::{self, Write};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -106,8 +105,8 @@ impl Query for GetIssuesQuery {
         )
     }
 
-    fn variables(&self) -> HashMap<String, Variable> {
-        HashMap::from([
+    fn variables(&self) -> [(String, Variable); 2] {
+        [
             (
                 self.repo_id_varname(),
                 Variable {
@@ -122,7 +121,7 @@ impl Query for GetIssuesQuery {
                     value: self.cursor.clone().into(),
                 },
             ),
-        ])
+        ]
     }
 
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Item, serde_json::Error> {
