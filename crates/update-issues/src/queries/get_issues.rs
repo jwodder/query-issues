@@ -36,7 +36,7 @@ impl Paginator for GetIssues {
             repo_id: self.repo_id.clone(),
             cursor,
             include_closed: self.include_closed,
-            alias: None,
+            prefix: None,
         }
     }
 }
@@ -46,20 +46,20 @@ pub(crate) struct GetIssuesQuery {
     repo_id: Id,
     cursor: Option<Cursor>,
     include_closed: bool,
-    alias: Option<String>,
+    prefix: Option<String>,
 }
 
 impl GetIssuesQuery {
     fn repo_id_varname(&self) -> String {
-        match self.alias {
-            Some(ref alias) => format!("{alias}_repo_id"),
+        match self.prefix {
+            Some(ref prefix) => format!("{prefix}_repo_id"),
             None => String::from("repo_id"),
         }
     }
 
     fn cursor_varname(&self) -> String {
-        match self.alias {
-            Some(ref alias) => format!("{alias}_cursor"),
+        match self.prefix {
+            Some(ref prefix) => format!("{prefix}_cursor"),
             None => String::from("cursor"),
         }
     }
@@ -68,15 +68,12 @@ impl GetIssuesQuery {
 impl Query for GetIssuesQuery {
     type Item = Page<Ided<Issue>>;
 
-    fn with_alias(mut self, alias: String) -> Self {
-        self.alias = Some(alias);
+    fn with_variable_prefix(mut self, prefix: String) -> Self {
+        self.prefix = Some(prefix);
         self
     }
 
     fn write_graphql<W: Write>(&self, mut s: W) -> fmt::Result {
-        if let Some(ref alias) = self.alias {
-            write!(s, "{alias}: ")?;
-        }
         writeln!(
             s,
             indoc! {"

@@ -101,7 +101,7 @@ impl Client {
                 let query = state
                     .paginator
                     .for_cursor(state.cursor.as_ref())
-                    .with_alias(alias.clone());
+                    .with_variable_prefix(alias.clone());
                 for (name, Variable { gql_type, value }) in query.variables() {
                     if i > 0 {
                         write!(&mut varstr, ", ")?;
@@ -109,6 +109,7 @@ impl Client {
                     write!(&mut varstr, "${name}: {gql_type}")?;
                     variables.insert(name, value);
                 }
+                write!(&mut qwrite, "{alias}: ")?;
                 query.write_graphql(&mut qwrite)?;
                 active.insert(alias, ActiveQuery { state, query });
             }

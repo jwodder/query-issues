@@ -29,7 +29,7 @@ impl Paginator for GetOwnerRepos {
 pub(crate) struct GetOwnerReposQuery {
     owner: String,
     cursor: Option<Cursor>,
-    alias: Option<String>,
+    prefix: Option<String>,
 }
 
 impl GetOwnerReposQuery {
@@ -37,20 +37,20 @@ impl GetOwnerReposQuery {
         GetOwnerReposQuery {
             owner,
             cursor,
-            alias: None,
+            prefix: None,
         }
     }
 
     fn owner_varname(&self) -> String {
-        match self.alias {
-            Some(ref alias) => format!("{alias}_owner"),
+        match self.prefix {
+            Some(ref prefix) => format!("{prefix}_owner"),
             None => String::from("owner"),
         }
     }
 
     fn cursor_varname(&self) -> String {
-        match self.alias {
-            Some(ref alias) => format!("{alias}_cursor"),
+        match self.prefix {
+            Some(ref prefix) => format!("{prefix}_cursor"),
             None => String::from("cursor"),
         }
     }
@@ -59,15 +59,12 @@ impl GetOwnerReposQuery {
 impl Query for GetOwnerReposQuery {
     type Item = Page<Ided<Repository>>;
 
-    fn with_alias(mut self, alias: String) -> Self {
-        self.alias = Some(alias);
+    fn with_variable_prefix(mut self, prefix: String) -> Self {
+        self.prefix = Some(prefix);
         self
     }
 
     fn write_graphql<W: Write>(&self, mut s: W) -> fmt::Result {
-        if let Some(ref alias) = self.alias {
-            write!(s, "{alias}: ")?;
-        }
         writeln!(
             s,
             indoc! {"
