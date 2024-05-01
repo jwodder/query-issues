@@ -1,6 +1,6 @@
 use crate::config::PAGE_SIZE;
 use crate::types::{Issue, RepoWithIssues};
-use gqlient::{Cursor, Id, Page, PaginatedQuery, Variable};
+use gqlient::{Cursor, Id, Page, Paginator, Query, Variable};
 use indoc::indoc;
 use std::collections::HashMap;
 use std::fmt::{self, Write};
@@ -9,12 +9,39 @@ use std::fmt::{self, Write};
 pub(crate) struct GetIssues {
     repo_id: Id,
     cursor: Option<Cursor>,
-    alias: Option<String>,
 }
 
 impl GetIssues {
     pub(crate) fn new(repo_id: Id, cursor: Option<Cursor>) -> GetIssues {
-        GetIssues {
+        GetIssues { repo_id, cursor }
+    }
+}
+
+impl Paginator for GetIssues {
+    type Item = Issue;
+    type Query = GetIssuesQuery;
+
+    fn for_cursor(&self, cursor: Option<&Cursor>) -> GetIssuesQuery {
+        GetIssuesQuery::new(
+            self.repo_id.clone(),
+            match cursor {
+                Some(c) => Some(c.clone()),
+                None => self.cursor.clone(),
+            },
+        )
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(crate) struct GetIssuesQuery {
+    repo_id: Id,
+    cursor: Option<Cursor>,
+    alias: Option<String>,
+}
+
+impl GetIssuesQuery {
+    fn new(repo_id: Id, cursor: Option<Cursor>) -> GetIssuesQuery {
+        GetIssuesQuery {
             repo_id,
             cursor,
             alias: None,
@@ -36,19 +63,12 @@ impl GetIssues {
     }
 }
 
-impl PaginatedQuery for GetIssues {
-    type Item = Issue;
+impl Query for GetIssuesQuery {
+    type Item = Page<Issue>;
 
-    fn set_alias(&mut self, alias: String) {
+    fn with_alias(mut self, alias: String) -> Self {
         self.alias = Some(alias);
-    }
-
-    fn get_cursor(&self) -> Option<Cursor> {
-        self.cursor.clone()
-    }
-
-    fn set_cursor(&mut self, cursor: Option<Cursor>) {
-        self.cursor = cursor;
+        self
     }
 
     fn write_graphql<W: Write>(&self, mut s: W) -> fmt::Result {
@@ -105,10 +125,7 @@ impl PaginatedQuery for GetIssues {
         ])
     }
 
-    fn parse_response(
-        &self,
-        value: serde_json::Value,
-    ) -> Result<Page<Self::Item>, serde_json::Error> {
+    fn parse_response(&self, value: serde_json::Value) -> Result<Page<Issue>, serde_json::Error> {
         let raw = serde_json::from_value::<RepoWithIssues>(value)?;
         Ok(Page {
             items: raw.issues,

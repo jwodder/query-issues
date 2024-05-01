@@ -63,7 +63,7 @@ impl Database {
         report
     }
 
-    pub(crate) fn issue_queries(&self) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
+    pub(crate) fn issue_paginators(&self) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
         self.0
             .iter()
             .filter(|(_, repo)| repo.details.open_issues != 0)

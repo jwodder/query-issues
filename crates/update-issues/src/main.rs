@@ -36,11 +36,11 @@ fn main() -> anyhow::Result<()> {
     let big_start = Instant::now();
 
     eprintln!("[·] Fetching repositories …");
-    let owner_queries = OWNERS
+    let owner_paginators = OWNERS
         .iter()
         .map(|owner| (owner, GetOwnerRepos::new(owner.to_string())));
     let start = Instant::now();
-    let repos = client.batch_paginate(owner_queries)?;
+    let repos = client.batch_paginate(owner_paginators)?;
     let elapsed = start.elapsed();
     let repos = repos.into_iter().map(|pr| pr.items).concat();
     eprintln!("[·] Fetched {} repositories in {:?}", repos.len(), elapsed);
@@ -51,7 +51,7 @@ fn main() -> anyhow::Result<()> {
     eprintln!("[·] Fetching issues …");
     let start = Instant::now();
     let mut repo_qty = 0;
-    let issues = client.batch_paginate(db.issue_queries().inspect(|_| repo_qty += 1))?;
+    let issues = client.batch_paginate(db.issue_paginators().inspect(|_| repo_qty += 1))?;
     let elapsed = start.elapsed();
     let qty: usize = issues.iter().map(|pr| pr.items.len()).sum();
     eprintln!("[·] Fetched {qty} issues from {repo_qty} repositories in {elapsed:?}");
