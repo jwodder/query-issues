@@ -35,17 +35,13 @@ impl Client {
     }
 
     pub fn get_rate_limit(&self) -> anyhow::Result<RateLimit> {
-        let r = self
-            .inner
+        self.inner
             .get(RATE_LIMIT_URL)
             .call()
             .context("failed to perform rate limit request")?
             .into_json::<RateLimitResponse>()
-            .context("failed to deserialize rate limit response")?;
-        Ok(RateLimit {
-            used: r.resources.graphql.used,
-            reset: r.resources.graphql.reset,
-        })
+            .context("failed to deserialize rate limit response")
+            .map(|r| r.resources.graphql)
     }
 
     pub fn query(&self, query: String, variables: JsonMap) -> anyhow::Result<JsonMap> {
@@ -198,16 +194,10 @@ struct RateLimitResponse {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct RateLimitResources {
-    graphql: RateLimitEntry,
+    graphql: RateLimit,
 }
 
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq)]
-struct RateLimitEntry {
-    used: u32,
-    reset: u64,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct RateLimit {
     used: u32,
     reset: u64,
