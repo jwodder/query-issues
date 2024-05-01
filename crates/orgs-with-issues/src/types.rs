@@ -48,8 +48,8 @@ pub(crate) struct Issue {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(crate) struct RawIssue {
-    pub(crate) number: u64,
-    pub(crate) title: String,
-    pub(crate) url: String,
+struct RawIssue {
+    number: u64,
+    title: String,
+    url: String,
 }
