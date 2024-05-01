@@ -1,6 +1,6 @@
 use crate::config::PAGE_SIZE;
 use crate::types::RepoDetails;
-use gqlient::{Connection, Cursor, Ided, Page, PaginatedQuery, Variable};
+use gqlient::{Cursor, Ided, Page, PaginatedQuery, Variable};
 use indoc::indoc;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -115,26 +115,18 @@ impl PaginatedQuery for GetOwnerRepos {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<Self::Item>, serde_json::Error> {
-        let raw = serde_json::from_value::<Response>(value)?;
-        Ok(Page {
-            items: raw
-                .repositories
-                .nodes
-                .into_iter()
-                .map(|Ided { id, data }| Ided {
-                    id,
-                    data: RepoDetails::from(data),
-                })
-                .collect(),
-            end_cursor: raw.repositories.page_info.end_cursor,
-            has_next_page: raw.repositories.page_info.has_next_page,
+        serde_json::from_value::<Response>(value).map(|page| {
+            page.repositories.map_items(|Ided { id, data }| Ided {
+                id,
+                data: RepoDetails::from(data),
+            })
         })
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct Response {
-    repositories: Connection<Ided<RawRepoDetails>>,
+    repositories: Page<Ided<RawRepoDetails>>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

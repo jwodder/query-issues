@@ -1,4 +1,4 @@
-use gqlient::{Connection, Cursor};
+use gqlient::{Cursor, Page};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -13,7 +13,7 @@ pub(crate) struct RepoWithIssues {
 #[serde(rename_all = "camelCase")]
 struct RawRepoDetails {
     name_with_owner: String,
-    issues: Connection<RawIssue>,
+    issues: Page<RawIssue>,
 }
 
 impl From<RawRepoDetails> for RepoWithIssues {
@@ -21,7 +21,7 @@ impl From<RawRepoDetails> for RepoWithIssues {
         RepoWithIssues {
             issues: value
                 .issues
-                .nodes
+                .items
                 .into_iter()
                 .map(|ri| Issue {
                     repo: value.name_with_owner.clone(),
@@ -30,8 +30,8 @@ impl From<RawRepoDetails> for RepoWithIssues {
                     url: ri.url,
                 })
                 .collect(),
-            issue_cursor: value.issues.page_info.end_cursor,
-            has_more_issues: value.issues.page_info.has_next_page,
+            issue_cursor: value.issues.end_cursor,
+            has_more_issues: value.issues.has_next_page,
         }
     }
 }

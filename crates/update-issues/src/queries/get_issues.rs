@@ -1,6 +1,6 @@
 use crate::config::PAGE_SIZE;
 use crate::types::Issue;
-use gqlient::{Connection, Cursor, Id, Ided, Page, PaginatedQuery, Variable};
+use gqlient::{Cursor, Id, Ided, Page, PaginatedQuery, Variable};
 use indoc::indoc;
 use serde::Deserialize;
 use std::collections::HashMap;
@@ -119,16 +119,11 @@ impl PaginatedQuery for GetIssues {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<Self::Item>, serde_json::Error> {
-        let raw = serde_json::from_value::<Response>(value)?;
-        Ok(Page {
-            items: raw.issues.nodes,
-            end_cursor: raw.issues.page_info.end_cursor,
-            has_next_page: raw.issues.page_info.has_next_page,
-        })
+        serde_json::from_value::<Response>(value).map(|r| r.issues)
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct Response {
-    issues: Connection<Ided<Issue>>,
+    issues: Page<Ided<Issue>>,
 }
