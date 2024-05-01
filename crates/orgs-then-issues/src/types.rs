@@ -2,9 +2,32 @@ use gqlient::{Connection, Cursor};
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(from = "RawRepo")]
 pub(crate) struct Repository {
     pub(crate) fullname: String,
     pub(crate) open_issues: u64,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct RawRepo {
+    name_with_owner: String,
+    issues: CountContainer,
+}
+
+impl From<RawRepo> for Repository {
+    fn from(value: RawRepo) -> Repository {
+        Repository {
+            fullname: value.name_with_owner,
+            open_issues: value.issues.total_count,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct CountContainer {
+    total_count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -30,28 +53,6 @@ pub(crate) struct RawIssue {
     pub(crate) number: u64,
     pub(crate) title: String,
     pub(crate) url: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct RawRepo {
-    pub(crate) name_with_owner: String,
-    pub(crate) issues: CountContainer,
-}
-
-impl From<RawRepo> for Repository {
-    fn from(value: RawRepo) -> Repository {
-        Repository {
-            fullname: value.name_with_owner,
-            open_issues: value.issues.total_count,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-pub(crate) struct CountContainer {
-    pub(crate) total_count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

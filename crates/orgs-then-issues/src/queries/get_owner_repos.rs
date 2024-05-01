@@ -1,5 +1,5 @@
 use crate::config::PAGE_SIZE;
-use crate::types::{RawRepo, Repository};
+use crate::types::Repository;
 use gqlient::{Connection, Cursor, Ided, Page, PaginatedQuery, Variable};
 use indoc::indoc;
 use serde::Deserialize;
@@ -114,15 +114,7 @@ impl PaginatedQuery for GetOwnerRepos {
     ) -> Result<Page<Self::Item>, serde_json::Error> {
         let raw = serde_json::from_value::<Response>(value)?;
         Ok(Page {
-            items: raw
-                .repositories
-                .nodes
-                .into_iter()
-                .map(|Ided { id, data }| Ided {
-                    id,
-                    data: Repository::from(data),
-                })
-                .collect(),
+            items: raw.repositories.nodes,
             end_cursor: raw.repositories.page_info.end_cursor,
             has_next_page: raw.repositories.page_info.has_next_page,
         })
@@ -131,5 +123,5 @@ impl PaginatedQuery for GetOwnerRepos {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct Response {
-    repositories: Connection<Ided<RawRepo>>,
+    repositories: Connection<Ided<Repository>>,
 }
