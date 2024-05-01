@@ -1,7 +1,7 @@
 use gqlient::{Connection, Cursor};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(from = "RawRepo")]
 pub(crate) struct Repository {
     pub(crate) fullname: String,
@@ -30,14 +30,14 @@ struct CountContainer {
     total_count: u64,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub(crate) struct RepoWithIssues {
     pub(crate) issues: Vec<Issue>,
     pub(crate) issue_cursor: Option<Cursor>,
     pub(crate) has_more_issues: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub(crate) struct Issue {
     pub(crate) repo: String,
     pub(crate) number: u64,
