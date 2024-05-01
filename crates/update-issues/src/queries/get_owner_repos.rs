@@ -115,44 +115,11 @@ impl PaginatedQuery for GetOwnerRepos {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<Self::Item>, serde_json::Error> {
-        serde_json::from_value::<Response>(value).map(|page| {
-            page.repositories.map_items(|Ided { id, data }| Ided {
-                id,
-                data: RepoDetails::from(data),
-            })
-        })
+        serde_json::from_value::<Response>(value).map(|r| r.repositories)
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct Response {
-    repositories: Page<Ided<RawRepoDetails>>,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct RawRepoDetails {
-    owner: RepositoryOwner,
-    name: String,
-    issues: Issues,
-}
-
-impl From<RawRepoDetails> for RepoDetails {
-    fn from(value: RawRepoDetails) -> RepoDetails {
-        RepoDetails {
-            owner: value.owner.login,
-            name: value.name,
-            open_issues: value.issues.total_count,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct RepositoryOwner {
-    login: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-struct Issues {
-    total_count: u64,
+    repositories: Page<Ided<RepoDetails>>,
 }
