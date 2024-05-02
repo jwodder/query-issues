@@ -12,7 +12,7 @@ publish.workspace = true
 [dependencies]
 anyhow = "1.0.82"
 indenter = "0.3.3"
-serde = { version = "1.0.198", features = ["derive"] }
+serde = { version = "1.0.200", features = ["derive"] }
 serde_json = "1.0.116"
 ureq = { version = "2.9.7", features = ["json"] }
 
