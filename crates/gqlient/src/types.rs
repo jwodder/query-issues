@@ -126,3 +126,12 @@ impl<'de, T: Deserialize<'de>> Visitor<'de> for SingletonVisitor<T> {
         }
     }
 }
+
+// Utility function for deserializing a single-field map as the field's value
+pub fn singleton_field<'de, T, D>(deserializer: D) -> Result<T, D::Error>
+where
+    T: Deserialize<'de>,
+    D: Deserializer<'de>,
+{
+    Singleton::<T>::deserialize(deserializer).map(|r| r.0)
+}

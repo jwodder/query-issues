@@ -1,39 +1,12 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(from = "RawRepoDetails")]
 pub(crate) struct RepoDetails {
+    #[serde(deserialize_with = "gqlient::singleton_field")]
     pub(crate) owner: String,
     pub(crate) name: String,
+    #[serde(rename = "issues", deserialize_with = "gqlient::singleton_field")]
     pub(crate) open_issues: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct RawRepoDetails {
-    owner: RepositoryOwner,
-    name: String,
-    issues: CountContainer,
-}
-
-impl From<RawRepoDetails> for RepoDetails {
-    fn from(value: RawRepoDetails) -> RepoDetails {
-        RepoDetails {
-            owner: value.owner.login,
-            name: value.name,
-            open_issues: value.issues.total_count,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct RepositoryOwner {
-    login: String,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-struct CountContainer {
-    total_count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -2,32 +2,11 @@ use gqlient::{Cursor, Page};
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(from = "RawRepo")]
 pub(crate) struct Repository {
+    #[serde(rename = "nameWithOwner")]
     pub(crate) fullname: String,
+    #[serde(rename = "issues", deserialize_with = "gqlient::singleton_field")]
     pub(crate) open_issues: u64,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-struct RawRepo {
-    name_with_owner: String,
-    issues: CountContainer,
-}
-
-impl From<RawRepo> for Repository {
-    fn from(value: RawRepo) -> Repository {
-        Repository {
-            fullname: value.name_with_owner,
-            open_issues: value.issues.total_count,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-struct CountContainer {
-    total_count: u64,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
