@@ -18,7 +18,7 @@ indenter = "0.3.3"
 indoc = "2.0.5"
 itertools = "0.12.1"
 patharg = "0.4.0"
-serde = { version = "1.0.198", features = ["derive"] }
+serde = { version = "1.0.200", features = ["derive"] }
 serde_json = "1.0.116"
 
 [lints]
