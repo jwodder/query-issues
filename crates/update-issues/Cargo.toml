@@ -14,7 +14,6 @@ anyhow = "1.0.82"
 clap = { version = "4.5.4", default-features = false, features = ["derive", "error-context", "help", "std", "suggestions", "usage", "wrap_help"] }
 gh-token = "0.1.7"
 gqlient = { path = "../gqlient" }
-indenter = "0.3.3"
 indoc = "2.0.5"
 itertools = "0.12.1"
 patharg = "0.4.0"
