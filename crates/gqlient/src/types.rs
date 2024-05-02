@@ -1,4 +1,9 @@
-use serde::{Deserialize, Serialize};
+use serde::{
+    de::{self, Deserializer, IgnoredAny, MapAccess, Visitor},
+    Deserialize, Serialize,
+};
+use std::fmt;
+use std::marker::PhantomData;
 
 pub type JsonMap = serde_json::Map<String, serde_json::Value>;
 
@@ -78,4 +83,46 @@ struct PageInfo {
 pub struct Variable {
     pub gql_type: String,
     pub value: serde_json::Value,
+}
+
+// Utility type for use in deserializing just `foo` from a map of the form
+// `{"anything": foo}`
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct Singleton<T>(pub T);
+
+impl<'de, T: Deserialize<'de>> Deserialize<'de> for Singleton<T> {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        deserializer.deserialize_map(SingletonVisitor::new())
+    }
+}
+
+struct SingletonVisitor<T>(PhantomData<T>);
+
+impl<T> SingletonVisitor<T> {
+    fn new() -> Self {
+        SingletonVisitor(PhantomData)
+    }
+}
+
+impl<'de, T: Deserialize<'de>> Visitor<'de> for SingletonVisitor<T> {
+    type Value = Singleton<T>;
+
+    fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter.write_str("a string-keyed map containing a single field")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error> {
+        if let Some((_, value)) = map.next_entry::<String, T>()? {
+            if map.next_entry::<String, IgnoredAny>()?.is_some() {
+                Err(de::Error::invalid_length(
+                    map.size_hint().unwrap_or(0).saturating_add(2),
+                    &self,
+                ))
+            } else {
+                Ok(Singleton(value))
+            }
+        } else {
+            Err(de::Error::invalid_length(0, &self))
+        }
+    }
 }

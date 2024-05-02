@@ -12,7 +12,7 @@ pub(crate) struct RepoDetails {
 struct RawRepoDetails {
     owner: RepositoryOwner,
     name: String,
-    issues: Issues,
+    issues: CountContainer,
 }
 
 impl From<RawRepoDetails> for RepoDetails {
@@ -32,7 +32,7 @@ struct RepositoryOwner {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-struct Issues {
+struct CountContainer {
     total_count: u64,
 }
 

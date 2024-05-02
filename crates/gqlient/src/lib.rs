@@ -132,6 +132,8 @@ impl Client {
     }
 }
 
+// This can't be replaced with Singleton because the JSON contains more than
+// one field.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct RateLimitResponse {
     resources: RateLimitResources,

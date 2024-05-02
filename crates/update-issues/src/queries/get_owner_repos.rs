@@ -1,8 +1,7 @@
 use crate::config::PAGE_SIZE;
 use crate::types::RepoDetails;
-use gqlient::{Cursor, Ided, Page, Paginator, Query, Variable};
+use gqlient::{Cursor, Ided, Page, Paginator, Query, Singleton, Variable};
 use indoc::indoc;
-use serde::Deserialize;
 use std::fmt::{self, Write};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -121,11 +120,6 @@ impl Query for GetOwnerReposQuery {
     }
 
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Item, serde_json::Error> {
-        serde_json::from_value::<Response>(value).map(|r| r.repositories)
+        serde_json::from_value::<Singleton<Self::Item>>(value).map(|r| r.0)
     }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-struct Response {
-    repositories: Page<Ided<RepoDetails>>,
 }
