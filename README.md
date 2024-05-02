@@ -70,6 +70,11 @@ database as appropriate.  Finally, the updated database is written out to
 `<infile>` and `<outfile>` may be set to `-` to read from stdin/write to
 stdout.
 
+`update-issues` outputs to stderr the number of repositories fetched (including
+how many had open issues), the number of open issues fetched, the numbers of
+repositories & issues in the database that were added/modified/removed, the
+elapsed time, and (if possible) the number of API rate limit points used.
+
 > [!NOTE]
 > This strategy is unable to update a database to remove issues that have since
 > been deleted, transferred to another repository, or converted to discussions.
