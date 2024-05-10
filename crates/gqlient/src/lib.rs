@@ -35,6 +35,11 @@ impl Client {
         Client { inner }
     }
 
+    pub fn new_with_local_token() -> anyhow::Result<Client> {
+        let token = gh_token::get().context("unable to fetch GitHub access token")?;
+        Ok(Client::new(&token))
+    }
+
     pub fn get_rate_limit(&self) -> anyhow::Result<RateLimit> {
         self.inner
             .get(RATE_LIMIT_URL)

@@ -162,6 +162,7 @@ name = "gqlient"
 version = "0.1.0-dev"
 dependencies = [
  "anyhow",
+ "gh-token",
  "indenter",
  "serde",
  "serde_json",
@@ -275,7 +276,6 @@ version = "0.1.0-dev"
 dependencies = [
  "anyhow",
  "clap",
- "gh-token",
  "gqlient",
  "indoc",
  "serde",
@@ -288,7 +288,6 @@ version = "0.1.0-dev"
 dependencies = [
  "anyhow",
  "clap",
- "gh-token",
  "gqlient",
  "indoc",
  "serde",
@@ -531,7 +530,6 @@ version = "0.1.0-dev"
 dependencies = [
  "anyhow",
  "clap",
- "gh-token",
  "gqlient",
  "indoc",
  "itertools",

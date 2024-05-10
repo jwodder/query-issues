@@ -4,7 +4,6 @@ mod queries;
 mod types;
 use crate::db::{Database, IssueDiff};
 use crate::queries::GetOwnerRepos;
-use anyhow::Context;
 use clap::Parser;
 use gqlient::{Client, PaginationResults};
 use itertools::Itertools;
@@ -75,8 +74,7 @@ fn main() -> anyhow::Result<()> {
         Database::default()
     };
 
-    let token = gh_token::get().context("unable to fetch GitHub access token")?;
-    let client = Client::new(&token);
+    let client = Client::new_with_local_token()?;
     let start_rate_limit = client.get_rate_limit()?;
 
     let big_start = Instant::now();

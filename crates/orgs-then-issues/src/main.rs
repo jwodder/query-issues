@@ -2,7 +2,6 @@ mod config;
 mod queries;
 mod types;
 use crate::queries::{GetIssues, GetOwnerRepos};
-use anyhow::Context;
 use clap::Parser;
 use gqlient::Client;
 use std::time::Instant;
@@ -17,8 +16,7 @@ struct Arguments {
 
 fn main() -> anyhow::Result<()> {
     let args = Arguments::parse();
-    let token = gh_token::get().context("unable to fetch GitHub access token")?;
-    let client = Client::new(&token);
+    let client = Client::new_with_local_token()?;
     let start_rate_limit = client.get_rate_limit()?;
 
     let start = Instant::now();
