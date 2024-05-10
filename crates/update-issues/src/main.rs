@@ -7,11 +7,16 @@ use crate::queries::GetOwnerRepos;
 use clap::Parser;
 use gqlient::{Client, PaginationResults};
 use patharg::{InputArg, OutputArg};
+use std::num::NonZeroUsize;
 use std::time::Instant;
 
 /// Measure time to create & update a local database of open GitHub issues
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 struct Arguments {
+    /// Number of sub-queries to make per GraphQL request
+    #[arg(short = 'B', long)]
+    batch_size: Option<NonZeroUsize>,
+
     /// Load the initial database state from the given file
     #[arg(short, long)]
     infile: Option<InputArg>,
@@ -35,21 +40,15 @@ struct Arguments {
 
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 struct Options {
+    batch_size: Option<NonZeroUsize>,
     infile: Option<InputArg>,
     outfile: Option<OutputArg>,
     owners: Vec<String>,
 }
 
 impl From<Arguments> for Options {
-    fn from(
-        Arguments {
-            infile,
-            no_save,
-            outfile,
-            owners,
-        }: Arguments,
-    ) -> Options {
-        let outfile = match (outfile, &infile, no_save) {
+    fn from(args: Arguments) -> Options {
+        let outfile = match (args.outfile, &args.infile, args.no_save) {
             (Some(f), _, _) => Some(f),
             (None, None, _) => None,
             (None, _, true) => None,
@@ -57,9 +56,10 @@ impl From<Arguments> for Options {
             (None, Some(InputArg::Path(p)), false) => Some(OutputArg::Path(p.clone())),
         };
         Options {
-            infile,
+            infile: args.infile,
             outfile,
-            owners,
+            owners: args.owners,
+            batch_size: args.batch_size,
         }
     }
 }
@@ -73,7 +73,10 @@ fn main() -> anyhow::Result<()> {
         Database::default()
     };
 
-    let client = Client::new_with_local_token()?;
+    let mut client = Client::new_with_local_token()?;
+    if let Some(bsz) = opts.batch_size {
+        client.batch_size(bsz);
+    }
     let start_rate_limit = client.get_rate_limit()?;
 
     let big_start = Instant::now();

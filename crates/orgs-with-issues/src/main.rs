@@ -7,11 +7,16 @@ use clap::Parser;
 use gqlient::{Client, Ided};
 use serde_jsonlines::WriteExt;
 use std::io::Write;
+use std::num::NonZeroUsize;
 use std::time::Instant;
 
 /// Measure time to fetch open GitHub issues via GraphQL
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 struct Arguments {
+    /// Number of sub-queries to make per GraphQL request
+    #[arg(short = 'B', long)]
+    batch_size: Option<NonZeroUsize>,
+
     /// Dump fetched issue information to the given file
     #[arg(short, long)]
     outfile: Option<patharg::OutputArg>,
@@ -23,7 +28,10 @@ struct Arguments {
 
 fn main() -> anyhow::Result<()> {
     let args = Arguments::parse();
-    let client = Client::new_with_local_token()?;
+    let mut client = Client::new_with_local_token()?;
+    if let Some(bsz) = args.batch_size {
+        client.batch_size(bsz);
+    }
     let start_rate_limit = client.get_rate_limit()?;
 
     let big_start = Instant::now();
