@@ -1,17 +1,18 @@
-use crate::config::PAGE_SIZE;
 use crate::types::RepoDetails;
 use gqlient::{Cursor, Ided, Page, Paginator, Query, Singleton, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
+use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetOwnerRepos {
     owner: String,
+    page_size: NonZeroUsize,
 }
 
 impl GetOwnerRepos {
-    pub(crate) fn new(owner: String) -> GetOwnerRepos {
-        GetOwnerRepos { owner }
+    pub(crate) fn new(owner: String, page_size: NonZeroUsize) -> GetOwnerRepos {
+        GetOwnerRepos { owner, page_size }
     }
 }
 
@@ -20,7 +21,7 @@ impl Paginator for GetOwnerRepos {
     type Query = GetOwnerReposQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetOwnerReposQuery {
-        GetOwnerReposQuery::new(self.owner.clone(), cursor.cloned())
+        GetOwnerReposQuery::new(self.owner.clone(), cursor.cloned(), self.page_size)
     }
 }
 
@@ -28,14 +29,16 @@ impl Paginator for GetOwnerRepos {
 pub(crate) struct GetOwnerReposQuery {
     owner: String,
     cursor: Option<Cursor>,
+    page_size: NonZeroUsize,
     prefix: Option<String>,
 }
 
 impl GetOwnerReposQuery {
-    fn new(owner: String, cursor: Option<Cursor>) -> GetOwnerReposQuery {
+    fn new(owner: String, cursor: Option<Cursor>, page_size: NonZeroUsize) -> GetOwnerReposQuery {
         GetOwnerReposQuery {
             owner,
             cursor,
+            page_size,
             prefix: None,
         }
     }
@@ -96,7 +99,7 @@ impl Query for GetOwnerReposQuery {
         "},
             owner_varname = self.owner_varname(),
             cursor_varname = self.cursor_varname(),
-            page_size = PAGE_SIZE,
+            page_size = self.page_size,
         )
     }
 

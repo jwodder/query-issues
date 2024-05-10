@@ -1,4 +1,3 @@
-mod config;
 mod queries;
 mod types;
 use crate::queries::{GetIssues, GetOwnerRepos};
@@ -7,14 +6,23 @@ use clap::Parser;
 use gqlient::{Client, Ided};
 use serde_jsonlines::WriteExt;
 use std::io::Write;
+use std::num::NonZeroUsize;
 use std::time::Instant;
 
 /// Measure time to fetch open GitHub issues via GraphQL
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 struct Arguments {
+    /// Number of sub-queries to make per GraphQL request
+    #[arg(short = 'B', long)]
+    batch_size: Option<NonZeroUsize>,
+
     /// Dump fetched issue information to the given file
     #[arg(short, long)]
     outfile: Option<patharg::OutputArg>,
+
+    /// Number of items to request per page of results
+    #[arg(short = 'P', long, default_value = "100")]
+    page_size: NonZeroUsize,
 
     /// GitHub owners/organizations of repositories to fetch open issues for
     #[arg(required = true)]
@@ -23,7 +31,10 @@ struct Arguments {
 
 fn main() -> anyhow::Result<()> {
     let args = Arguments::parse();
-    let client = Client::new_with_local_token()?;
+    let mut client = Client::new_with_local_token()?;
+    if let Some(bsz) = args.batch_size {
+        client.batch_size(bsz);
+    }
     let start_rate_limit = client.get_rate_limit()?;
 
     let big_start = Instant::now();
@@ -35,7 +46,7 @@ fn main() -> anyhow::Result<()> {
     let owner_queries = args
         .owners
         .into_iter()
-        .map(|owner| (owner.clone(), GetOwnerRepos::new(owner)));
+        .map(|owner| (owner.clone(), GetOwnerRepos::new(owner, args.page_size)));
     let repos_start = Instant::now();
     let repos = client.batch_paginate(owner_queries)?;
     let elapsed = repos_start.elapsed();
@@ -48,7 +59,10 @@ fn main() -> anyhow::Result<()> {
             issues.extend(repo.issues);
         }
         if repo.has_more_issues {
-            issue_queries.push((id.clone(), GetIssues::new(id, repo.issue_cursor)));
+            issue_queries.push((
+                id.clone(),
+                GetIssues::new(id, repo.issue_cursor, args.page_size),
+            ));
         }
     }
     eprintln!(

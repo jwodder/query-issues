@@ -8,19 +8,22 @@ use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::collections::{hash_map::Entry, HashMap};
 use std::fmt::Write;
+use std::num::NonZeroUsize;
 use ureq::{Agent, AgentBuilder};
 
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
 static RATE_LIMIT_URL: &str = "https://api.github.com/rate_limit";
 
-const BATCH_SIZE: usize = 50;
+const DEFAULT_BATCH_SIZE: usize = 50;
 
 #[derive(Clone, Debug)]
 pub struct Client {
     inner: Agent,
+    batch_size: NonZeroUsize,
 }
 
 impl Client {
+    #[allow(clippy::missing_panics_doc)]
     pub fn new(token: &str) -> Client {
         let auth = format!("Bearer {token}");
         let inner = AgentBuilder::new()
@@ -32,12 +35,18 @@ impl Client {
                 )
             })
             .build();
-        Client { inner }
+        let batch_size =
+            NonZeroUsize::new(DEFAULT_BATCH_SIZE).expect("default batch size should be nonzero");
+        Client { inner, batch_size }
     }
 
     pub fn new_with_local_token() -> anyhow::Result<Client> {
         let token = gh_token::get().context("unable to fetch GitHub access token")?;
         Ok(Client::new(&token))
+    }
+
+    pub fn batch_size(&mut self, batch_size: NonZeroUsize) {
+        self.batch_size = batch_size;
     }
 
     pub fn get_rate_limit(&self) -> anyhow::Result<RateLimit> {
@@ -99,7 +108,7 @@ impl Client {
             let mut qstr = String::new();
             let mut qwrite = indented(&mut qstr).with_str("    ");
             for (i, state) in in_progress
-                .drain(0..(in_progress.len().min(BATCH_SIZE)))
+                .drain(0..(in_progress.len().min(self.batch_size.get())))
                 .enumerate()
             {
                 let alias = format!("q{i}");

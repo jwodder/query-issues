@@ -1,23 +1,25 @@
-use crate::config::PAGE_SIZE;
 use crate::types::Issue;
 use gqlient::{Cursor, Id, Ided, Page, Paginator, Query, Variable};
 use indoc::indoc;
 use serde::Deserialize;
 use std::fmt::{self, Write};
+use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetIssues {
     repo_id: Id,
     cursor: Option<Cursor>,
+    page_size: NonZeroUsize,
     include_closed: bool,
 }
 
 impl GetIssues {
-    pub(crate) fn new(repo_id: Id, cursor: Option<Cursor>) -> GetIssues {
+    pub(crate) fn new(repo_id: Id, cursor: Option<Cursor>, page_size: NonZeroUsize) -> GetIssues {
         let include_closed = cursor.is_some();
         GetIssues {
             repo_id,
             cursor,
+            page_size,
             include_closed,
         }
     }
@@ -35,6 +37,7 @@ impl Paginator for GetIssues {
         GetIssuesQuery {
             repo_id: self.repo_id.clone(),
             cursor,
+            page_size: self.page_size,
             include_closed: self.include_closed,
             prefix: None,
         }
@@ -45,6 +48,7 @@ impl Paginator for GetIssues {
 pub(crate) struct GetIssuesQuery {
     repo_id: Id,
     cursor: Option<Cursor>,
+    page_size: NonZeroUsize,
     include_closed: bool,
     prefix: Option<String>,
 }
@@ -102,7 +106,7 @@ impl Query for GetIssuesQuery {
         "},
             repo_id_varname = self.repo_id_varname(),
             cursor_varname = self.cursor_varname(),
-            page_size = PAGE_SIZE,
+            page_size = self.page_size,
             states = if self.include_closed {
                 "OPEN, CLOSED"
             } else {
