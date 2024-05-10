@@ -2,14 +2,14 @@ use crate::queries::GetIssues;
 use crate::types::{Issue, IssueState, RepoDetails};
 use anyhow::Context;
 use gqlient::{Cursor, Id, Ided};
-use serde::{Deserialize, Serialize};
+use serde::{de::Deserializer, Deserialize, Serialize};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
 use std::io;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
-pub(crate) struct Database(BTreeMap<Id, Repository>);
+pub(crate) struct Database(BTreeMap<Id, RepoWithIssues>);
 
 impl Database {
     pub(crate) fn load<R: io::Read>(reader: R) -> serde_json::Result<Self> {
@@ -24,7 +24,7 @@ impl Database {
         Ok(())
     }
 
-    pub(crate) fn get_mut(&mut self, repo_id: &Id) -> Option<&mut Repository> {
+    pub(crate) fn get_mut(&mut self, repo_id: &Id) -> Option<&mut RepoWithIssues> {
         self.0.get_mut(repo_id)
     }
 
@@ -34,23 +34,23 @@ impl Database {
     {
         let mut report = RepoDiff::default();
         let mut newmap = BTreeMap::new();
-        for Ided { id, data } in iter {
-            if let Some(mut repo) = self.0.remove(&id) {
-                if repo.details != data {
+        for Ided { id, data: repo } in iter {
+            if let Some(mut repo_w_issues) = self.0.remove(&id) {
+                if repo_w_issues.repository != repo {
                     report.modified += 1;
-                    if data.open_issues == 0 {
-                        report.closed_issues += repo.issues.len();
-                        repo.issue_cursor = None;
-                        repo.issues.clear();
+                    if repo.open_issues == 0 {
+                        report.closed_issues += repo_w_issues.issues.len();
+                        repo_w_issues.issue_cursor = None;
+                        repo_w_issues.issues.clear();
                     }
-                    repo.details = data;
+                    repo_w_issues.repository = repo;
                 }
-                newmap.insert(id, repo);
+                newmap.insert(id, repo_w_issues);
             } else {
                 newmap.insert(
                     id,
-                    Repository {
-                        details: data,
+                    RepoWithIssues {
+                        repository: repo,
                         issue_cursor: None,
                         issues: BTreeMap::new(),
                     },
@@ -66,7 +66,7 @@ impl Database {
     pub(crate) fn issue_paginators(&self) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
         self.0
             .iter()
-            .filter(|(_, repo)| repo.details.open_issues != 0)
+            .filter(|(_, repo)| repo.repository.open_issues != 0)
             .map(|(id, repo)| {
                 (
                     id.clone(),
@@ -77,13 +77,14 @@ impl Database {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct Repository {
-    details: RepoDetails,
+pub(crate) struct RepoWithIssues {
+    #[serde(deserialize_with = "deser_repo_details")]
+    repository: RepoDetails,
     issue_cursor: Option<Cursor>,
     issues: BTreeMap<Id, Issue>,
 }
 
-impl Repository {
+impl RepoWithIssues {
     pub(crate) fn set_issue_cursor(&mut self, cursor: Option<Cursor>) {
         self.issue_cursor = cursor;
     }
@@ -93,27 +94,50 @@ impl Repository {
         I: IntoIterator<Item = Ided<Issue>>,
     {
         let mut report = IssueDiff::default();
-        for Ided { id, data } in issues {
+        for Ided { id, data: iss } in issues {
             match self.issues.entry(id) {
-                Entry::Occupied(o) if data.state == IssueState::Closed => {
+                Entry::Occupied(o) if iss.state == IssueState::Closed => {
                     report.open_closed += 1;
                     o.remove();
                 }
-                Entry::Vacant(_) if data.state == IssueState::Closed => report.already_closed += 1,
+                Entry::Vacant(_) if iss.state == IssueState::Closed => report.already_closed += 1,
                 Entry::Occupied(mut o) => {
-                    if o.get() != &data {
+                    if o.get() != &iss {
                         report.modified += 1;
-                        o.insert(data);
+                        o.insert(iss);
                     }
                 }
                 Entry::Vacant(v) => {
                     report.added += 1;
-                    v.insert(data);
+                    v.insert(iss);
                 }
             }
         }
         report
     }
+}
+
+fn deser_repo_details<'de, D>(deserializer: D) -> Result<RepoDetails, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+    struct DirectDetails {
+        owner: String,
+        name: String,
+        open_issues: u64,
+    }
+
+    let DirectDetails {
+        owner,
+        name,
+        open_issues,
+    } = DirectDetails::deserialize(deserializer)?;
+    Ok(RepoDetails {
+        owner,
+        name,
+        open_issues,
+    })
 }
 
 #[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]

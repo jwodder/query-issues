@@ -5,7 +5,10 @@ pub(crate) struct RepoDetails {
     #[serde(deserialize_with = "gqlient::singleton_field")]
     pub(crate) owner: String,
     pub(crate) name: String,
-    #[serde(rename = "issues", deserialize_with = "gqlient::singleton_field")]
+    #[serde(
+        rename(deserialize = "issues"),
+        deserialize_with = "gqlient::singleton_field"
+    )]
     pub(crate) open_issues: u64,
 }
 
