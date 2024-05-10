@@ -2,7 +2,6 @@ mod config;
 mod db;
 mod queries;
 mod types;
-use crate::config::OWNERS;
 use crate::db::{Database, IssueDiff};
 use crate::queries::GetOwnerRepos;
 use anyhow::Context;
@@ -14,19 +13,57 @@ use std::time::Instant;
 
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 struct Arguments {
-    infile: InputArg,
+    #[arg(short, long)]
+    infile: Option<InputArg>,
+
+    #[arg(long, conflicts_with = "outfile")]
+    no_save: bool,
+
+    #[arg(short, long)]
     outfile: Option<OutputArg>,
+
+    #[arg(required = true)]
+    owners: Vec<String>,
+}
+
+#[derive(Clone, Debug, Eq, Parser, PartialEq)]
+struct Options {
+    infile: Option<InputArg>,
+    outfile: Option<OutputArg>,
+    owners: Vec<String>,
+}
+
+impl From<Arguments> for Options {
+    fn from(
+        Arguments {
+            infile,
+            no_save,
+            outfile,
+            owners,
+        }: Arguments,
+    ) -> Options {
+        let outfile = match (outfile, &infile, no_save) {
+            (Some(f), _, _) => Some(f),
+            (None, None, _) => None,
+            (None, _, true) => None,
+            (None, Some(InputArg::Stdin), false) => Some(OutputArg::Stdout),
+            (None, Some(InputArg::Path(p)), false) => Some(OutputArg::Path(p.clone())),
+        };
+        Options {
+            infile,
+            outfile,
+            owners,
+        }
+    }
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Arguments::parse();
-    let mut db = match args.infile.open() {
-        Ok(fp) => {
-            eprintln!("[·] Loading {:#} …", args.infile);
-            Database::load(fp)?
-        }
-        Err(e) if e.kind() == std::io::ErrorKind::NotFound => Database::default(),
-        Err(e) => return Err(e.into()),
+    let opts = Options::from(Arguments::parse());
+    let mut db = if let Some(infile) = opts.infile {
+        eprintln!("[·] Loading {infile:#} …");
+        Database::load(infile.open()?)?
+    } else {
+        Database::default()
     };
 
     let token = gh_token::get().context("unable to fetch GitHub access token")?;
@@ -36,9 +73,10 @@ fn main() -> anyhow::Result<()> {
     let big_start = Instant::now();
 
     eprintln!("[·] Fetching repositories …");
-    let owner_paginators = OWNERS
-        .iter()
-        .map(|owner| (owner, GetOwnerRepos::new(owner.to_string())));
+    let owner_paginators = opts
+        .owners
+        .into_iter()
+        .map(|owner| (owner.clone(), GetOwnerRepos::new(owner)));
     let start = Instant::now();
     let repos = client.batch_paginate(owner_paginators)?;
     let elapsed = start.elapsed();
@@ -76,17 +114,14 @@ fn main() -> anyhow::Result<()> {
 
     let end_rate_limit = client.get_rate_limit()?;
     if let Some(used) = end_rate_limit.used_since(start_rate_limit) {
-        println!("Used {used} rate limit points");
+        eprintln!("[·] Used {used} rate limit points");
     } else {
-        println!("Could not determine rate limit points used due to intervening reset");
+        eprintln!("[·] Could not determine rate limit points used due to intervening reset");
     }
 
-    let outfile = match (args.outfile, args.infile) {
-        (Some(f), _) => f,
-        (None, InputArg::Stdin) => OutputArg::Stdout,
-        (None, InputArg::Path(p)) => OutputArg::Path(p),
-    };
-    eprintln!("[·] Dumping to {outfile:#} …");
-    db.dump(outfile.create()?)?;
+    if let Some(outfile) = opts.outfile {
+        eprintln!("[·] Dumping to {outfile:#} …");
+        db.dump(outfile.create()?)?;
+    }
     Ok(())
 }

@@ -14,12 +14,13 @@ Usage
 `orgs-then-issues`
 ------------------
 
-    cargo run [--release] -p orgs-then-issues
+    cargo run [--release] -p orgs-then-issues <owner> ...
 
 Performs a paginated batch query to fetch all (public etc.) repositories
-belonging to a hardcoded set of owners, including getting the number of open
-issues in each repository.  Then, all repositories that have one or more open
-issues are queried in batches to get paginated lists of their open issues.
+belonging to the owners specified on the command line, including getting the
+number of open issues in each repository.  Then, all repositories that have one
+or more open issues are queried in batches to get paginated lists of their open
+issues.
 
 Outputs the number of repositories fetched (including how many had open
 issues), the number of open issues fetched, the elapsed time, and (if possible)
@@ -29,13 +30,13 @@ the number of API rate limit points used.
 `orgs-with-issues`
 ------------------
 
-    cargo run [--release] -p orgs-with-issues
+    cargo run [--release] -p orgs-with-issues <owner> ...
 
 Performs a paginated batch query to fetch all (public etc.) repositories
-belonging to a hardcoded set of owners; for each repository, the first page of
-open issues is also queried at the same time.  Then, all repositories that
-still have more open issues are queried repeatedly in batches to get their
-remaining pages of open issues.
+belonging to the owners specified on the command line; for each repository, the
+first page of open issues is also queried at the same time.  Then, all
+repositories that still have more open issues are queried repeatedly in batches
+to get their remaining pages of open issues.
 
 The key difference from `orgs-then-issues` is that this command fetches a page
 of issues for each repository as part of the same requests that fetch the
@@ -48,15 +49,16 @@ the elapsed time, and (if possible) the number of API rate limit points used.
 `update-issues`
 ---------------
 
-    cargo run [--release] -p update-issues -- <infile> [<outfile>]
+    cargo run [--release] -p update-issues -- [<options>] <owner> ...
 
 `update-issues` creates or updates a JSON database of open issues, only making
 requests for issues that have been updated since the database was last updated.
 
-The program reads a JSON database of repositories and their open issues from
-`<infile>`; if the given file does not exist, it is treated as an empty
-database.  It then performs a paginated batch query to fetch all (public etc.)
-repositories belonging to a hardcoded set of owners, including getting the
+If an `-i <path>`/`--infile <path>` option is given on the command line, the
+program reads a JSON database of repositories and their open issues from
+`<path>`; otherwise, it starts out with an empty database.  The program then
+performs a paginated batch query to fetch all (public etc.) repositories
+belonging to the owners specified on the command line, including getting the
 number of open issues in each repository.  Then, all repositories that have one
 or more open issues are queried in batches to get paginated lists of their
 issues ordered by update time.  For repositories that had open issues when the
@@ -64,16 +66,27 @@ database was last updated, this query fetches details on all issues, open &
 closed, that have been updated since the last run; for other repositories, only
 open issues are queried, but the query starts from the beginning of time.  The
 issues thus fetched are then added or (for closed issues) removed from the
-database as appropriate.  Finally, the updated database is written out to
-`<outfile>` if specified, otherwise back to `<infile>`.
+database as appropriate.
+
+Finally, the updated database is written to a file determined as follows:
+
+- If an `-o <path>`/`--outfile <path>` option was given on the command line,
+  the database is written to `<path>`.
+
+- Otherwise, if the `--infile` option was not specified or the `--no-save`
+  option was specified, nothing is written.
+
+- Otherwise, the database is written to the path supplied to the `--infile`
+  option.
 
 `<infile>` and `<outfile>` may be set to `-` to read from stdin/write to
 stdout.
 
-`update-issues` outputs to stderr the number of repositories fetched (including
-how many had open issues), the number of open issues fetched, the numbers of
-repositories & issues in the database that were added/modified/removed, the
-elapsed time, and (if possible) the number of API rate limit points used.
+While running, `update-issues` outputs to stderr the number of repositories
+fetched (including how many had open issues), the number of open issues
+fetched, the numbers of repositories & issues in the database that were
+added/modified/removed, the elapsed time, and (if possible) the number of API
+rate limit points used.
 
 > [!NOTE]
 > This strategy is unable to update a database to remove issues that have since

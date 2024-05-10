@@ -1,13 +1,20 @@
 mod config;
 mod queries;
 mod types;
-use crate::config::OWNERS;
 use crate::queries::{GetIssues, GetOwnerRepos};
 use anyhow::Context;
+use clap::Parser;
 use gqlient::Client;
 use std::time::Instant;
 
+#[derive(Clone, Debug, Eq, Parser, PartialEq)]
+struct Arguments {
+    #[arg(required = true)]
+    owners: Vec<String>,
+}
+
 fn main() -> anyhow::Result<()> {
+    let args = Arguments::parse();
     let token = gh_token::get().context("unable to fetch GitHub access token")?;
     let client = Client::new(&token);
     let start_rate_limit = client.get_rate_limit()?;
@@ -17,9 +24,10 @@ fn main() -> anyhow::Result<()> {
     let mut repos_with_issues_qty: usize = 0;
     let mut issue_qty: usize = 0;
 
-    let owner_queries = OWNERS
-        .iter()
-        .map(|owner| (owner, GetOwnerRepos::new(owner.to_string())));
+    let owner_queries = args
+        .owners
+        .into_iter()
+        .map(|owner| (owner.clone(), GetOwnerRepos::new(owner)));
     let repos = client.batch_paginate(owner_queries)?;
 
     let mut issue_queries = Vec::new();
