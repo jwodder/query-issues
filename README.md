@@ -16,19 +16,26 @@ Usage
 
     cargo run [--release] -p orgs-then-issues -- [<options>] <owner> ...
 
-Performs a paginated batch query to fetch all (public etc.) repositories
-belonging to the owners specified on the command line, including getting the
-number of open issues in each repository.  Then, all repositories that have one
-or more open issues are queried in batches to get paginated lists of their open
-issues.
+`orgs-then-issues` performs a paginated batch query to fetch all (public etc.)
+repositories belonging to the owners specified on the command line, including
+getting the number of open issues in each repository.  Then, all repositories
+that have one or more open issues are queried in batches to get paginated lists
+of their open issues.
 
-If an `-o <path>`/`--outfile <path>` option is given on the command line, all
-fetched issue information is dumped to `<path>` as JSON Lines at end of
-execution.
+The program logs to stderr the number of repositories fetched (including how
+many had open issues), the number of open issues fetched, the elapsed time, and
+(if possible) the number of API rate limit points used.
 
-Outputs to stderr the number of repositories fetched (including how many had
-open issues), the number of open issues fetched, the elapsed time, and (if
-possible) the number of API rate limit points used.
+### Options
+
+- `-B <int>`/`--batch-size <int>` — Set the number of sub-queries to make per
+  GraphQL request [default: 50]
+
+- `-o <path>`/`--outfile <path>` — Dump fetched issue information to the given
+  file as JSON Lines.  `<path>` may be `-` to write to standard output.
+
+- `-P <int>`/`--page-size <int>` — Set the number of items to request per page
+  of results [default: 100]
 
 
 `orgs-with-issues`
@@ -36,23 +43,30 @@ possible) the number of API rate limit points used.
 
     cargo run [--release] -p orgs-with-issues -- [<options>] <owner> ...
 
-Performs a paginated batch query to fetch all (public etc.) repositories
-belonging to the owners specified on the command line; for each repository, the
-first page of open issues is also queried at the same time.  Then, all
-repositories that still have more open issues are queried repeatedly in batches
-to get their remaining pages of open issues.
+`orgs-with-issues` performs a paginated batch query to fetch all (public etc.)
+repositories belonging to the owners specified on the command line; for each
+repository, the first page of open issues is also queried at the same time.
+Then, all repositories that still have more open issues are queried repeatedly
+in batches to get their remaining pages of open issues.
 
 The key difference from `orgs-then-issues` is that this command fetches a page
 of issues for each repository as part of the same requests that fetch the
 repositories themselves.
 
-If an `-o <path>`/`--outfile <path>` option is given on the command line, all
-fetched issue information is dumped to `<path>` as JSON Lines at end of
-execution.
+The program logs to stderr the number of repositories fetched, the number of
+open issues fetched, the elapsed time, and (if possible) the number of API rate
+limit points used.
 
-Outputs to stderr the number of repositories fetched, the number of open issues
-fetched, the elapsed time, and (if possible) the number of API rate limit
-points used.
+### Options
+
+- `-B <int>`/`--batch-size <int>` — Set the number of sub-queries to make per
+  GraphQL request [default: 50]
+
+- `-o <path>`/`--outfile <path>` — Dump fetched issue information to the given
+  file as JSON Lines.  `<path>` may be `-` to write to standard output.
+
+- `-P <int>`/`--page-size <int>` — Set the number of items to request per page
+  of results [default: 100]
 
 
 `update-issues`
@@ -77,29 +91,40 @@ open issues are queried, but the query starts from the beginning of time.  The
 issues thus fetched are then added or (for closed issues) removed from the
 database as appropriate.
 
-Finally, the updated database is written to a file determined as follows:
-
-- If an `-o <path>`/`--outfile <path>` option was given on the command line,
-  the database is written to `<path>`.
-
-- Otherwise, if the `--infile` option was not specified or the `--no-save`
-  option was specified, nothing is written.
-
-- Otherwise, the database is written to the path supplied to the `--infile`
-  option.
-
-The arguments to the `--infile` and `--outfile` options may be set to `-` to
-read from stdin/write to stdout.
-
-While running, `update-issues` outputs to stderr the number of repositories
-fetched (including how many had open issues), the number of open issues
-fetched, the numbers of repositories & issues in the database that were
-added/modified/removed, the elapsed time, and (if possible) the number of API
-rate limit points used.
+`update-issues` logs to stderr the number of repositories fetched (including
+how many had open issues), the number of open issues fetched, the numbers of
+repositories & issues in the database that were added/modified/removed, the
+elapsed time, and (if possible) the number of API rate limit points used.
 
 > [!NOTE]
 > This strategy is unable to update a database to remove issues that have since
 > been deleted, transferred to another repository, or converted to discussions.
+
+### Options
+
+- `-B <int>`/`--batch-size <int>` — Set the number of sub-queries to make per
+  GraphQL request [default: 50]
+
+- `-i <path>`/`--infile <path>` — Load the database at `<path>` at start of
+  program execution.  If not specified, an empty database is used.  `<path>`
+  may be `-` to read from standard input.
+
+  If this option is specified on the command line and neither `--no-save` nor
+  `-o`/`--outfile` is specified, then the updated database will be written back
+  out to this file at end of program execution.
+
+- `--no-save` — If the `-i`/`--infile` option was also supplied, do not write
+  the updated database back to the infile at end of program execution.
+
+  This option is mutually exclusive with `--outfile`.
+
+- `-o <path>`/`--outfile <path>` — Dump the final database to `<path>` at end
+  of program execution.  `<path>` may be `-` to write to standard output.
+
+  This option is mutually exclusive with `--no-save`.
+
+- `-P <int>`/`--page-size <int>` — Set the number of items to request per page
+  of results [default: 100]
 
 
 Authentication
