@@ -11,17 +11,26 @@ use itertools::Itertools;
 use patharg::{InputArg, OutputArg};
 use std::time::Instant;
 
+/// Measure time to create & update a local database of open GitHub issues
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 struct Arguments {
+    /// Load the initial database state from the given file
     #[arg(short, long)]
     infile: Option<InputArg>,
 
+    /// Do not write the updated database state to `--infile`
+    ///
+    /// Mutually exclusive with `--outfile`
     #[arg(long, conflicts_with = "outfile")]
     no_save: bool,
 
+    /// Dump the updated database state to the given file
+    ///
+    /// Mutually exclusive with `--no-save`
     #[arg(short, long)]
     outfile: Option<OutputArg>,
 
+    /// GitHub owners/organizations of repositories to fetch open issues for
     #[arg(required = true)]
     owners: Vec<String>,
 }

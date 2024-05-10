@@ -7,8 +7,10 @@ use clap::Parser;
 use gqlient::Client;
 use std::time::Instant;
 
+/// Measure time to fetch open GitHub issues via GraphQL
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 struct Arguments {
+    /// GitHub owners/organizations of repositories to fetch open issues for
     #[arg(required = true)]
     owners: Vec<String>,
 }
