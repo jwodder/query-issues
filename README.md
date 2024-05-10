@@ -14,7 +14,7 @@ Usage
 `orgs-then-issues`
 ------------------
 
-    cargo run [--release] -p orgs-then-issues <owner> ...
+    cargo run [--release] -p orgs-then-issues -- [<options>] <owner> ...
 
 Performs a paginated batch query to fetch all (public etc.) repositories
 belonging to the owners specified on the command line, including getting the
@@ -22,15 +22,19 @@ number of open issues in each repository.  Then, all repositories that have one
 or more open issues are queried in batches to get paginated lists of their open
 issues.
 
-Outputs the number of repositories fetched (including how many had open
-issues), the number of open issues fetched, the elapsed time, and (if possible)
-the number of API rate limit points used.
+If an `-o <path>`/`--outfile <path>` option is given on the command line, all
+fetched issue information is dumped to `<path>` as JSON Lines at end of
+execution.
+
+Outputs to stderr the number of repositories fetched (including how many had
+open issues), the number of open issues fetched, the elapsed time, and (if
+possible) the number of API rate limit points used.
 
 
 `orgs-with-issues`
 ------------------
 
-    cargo run [--release] -p orgs-with-issues <owner> ...
+    cargo run [--release] -p orgs-with-issues -- [<options>] <owner> ...
 
 Performs a paginated batch query to fetch all (public etc.) repositories
 belonging to the owners specified on the command line; for each repository, the
@@ -42,8 +46,13 @@ The key difference from `orgs-then-issues` is that this command fetches a page
 of issues for each repository as part of the same requests that fetch the
 repositories themselves.
 
-Outputs the number of repositories fetched, the number of open issues fetched,
-the elapsed time, and (if possible) the number of API rate limit points used.
+If an `-o <path>`/`--outfile <path>` option is given on the command line, all
+fetched issue information is dumped to `<path>` as JSON Lines at end of
+execution.
+
+Outputs to stderr the number of repositories fetched, the number of open issues
+fetched, the elapsed time, and (if possible) the number of API rate limit
+points used.
 
 
 `update-issues`
@@ -79,8 +88,8 @@ Finally, the updated database is written to a file determined as follows:
 - Otherwise, the database is written to the path supplied to the `--infile`
   option.
 
-`<infile>` and `<outfile>` may be set to `-` to read from stdin/write to
-stdout.
+The arguments to the `--infile` and `--outfile` options may be set to `-` to
+read from stdin/write to stdout.
 
 While running, `update-issues` outputs to stderr the number of repositories
 fetched (including how many had open issues), the number of open issues

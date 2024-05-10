@@ -1,5 +1,5 @@
 use gqlient::{Cursor, Page};
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub(crate) struct Repository {
@@ -44,7 +44,7 @@ impl From<RawRepoDetails> for RepoWithIssues {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct Issue {
     pub(crate) repo: String,
     pub(crate) number: u64,

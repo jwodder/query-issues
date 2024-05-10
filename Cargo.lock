@@ -278,7 +278,10 @@ dependencies = [
  "clap",
  "gqlient",
  "indoc",
+ "itertools",
+ "patharg",
  "serde",
+ "serde-jsonlines",
  "serde_json",
 ]
 
@@ -290,7 +293,9 @@ dependencies = [
  "clap",
  "gqlient",
  "indoc",
+ "patharg",
  "serde",
+ "serde-jsonlines",
  "serde_json",
 ]
 
@@ -400,6 +405,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ddc6f9cc94d67c0e21aaf7eda3a010fd3af78ebf6e096aa6e2e13c79749cce4f"
 dependencies = [
  "serde_derive",
+]
+
+[[package]]
+name = "serde-jsonlines"
+version = "0.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e228faf5f94badfe42723177b62cfb9b187351994cb4e852cd4a6a4c96dbeea8"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]
