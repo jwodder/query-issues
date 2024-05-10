@@ -1,4 +1,3 @@
-mod config;
 mod queries;
 mod types;
 use crate::queries::{GetIssues, GetOwnerRepos};
@@ -21,6 +20,10 @@ struct Arguments {
     #[arg(short, long)]
     outfile: Option<patharg::OutputArg>,
 
+    /// Number of items to request per page of results
+    #[arg(short = 'P', long, default_value = "100")]
+    page_size: NonZeroUsize,
+
     /// GitHub owners/organizations of repositories to fetch open issues for
     #[arg(required = true)]
     owners: Vec<String>,
@@ -42,7 +45,7 @@ fn main() -> anyhow::Result<()> {
     let owner_queries = args
         .owners
         .into_iter()
-        .map(|owner| (owner.clone(), GetOwnerRepos::new(owner)));
+        .map(|owner| (owner.clone(), GetOwnerRepos::new(owner, args.page_size)));
     let repos_start = Instant::now();
     let repos = client.batch_paginate(owner_queries)?;
     let elapsed = repos_start.elapsed();
@@ -52,7 +55,7 @@ fn main() -> anyhow::Result<()> {
         repo_qty += 1;
         if repo.open_issues > 0 {
             repos_with_issues_qty += 1;
-            issue_queries.push((id.clone(), GetIssues::new(id, None)));
+            issue_queries.push((id.clone(), GetIssues::new(id, args.page_size)));
         }
     }
     eprintln!(

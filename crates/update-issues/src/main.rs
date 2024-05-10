@@ -1,4 +1,3 @@
-mod config;
 mod db;
 mod queries;
 mod types;
@@ -33,40 +32,30 @@ struct Arguments {
     #[arg(short, long)]
     outfile: Option<OutputArg>,
 
+    /// Number of items to request per page of results
+    #[arg(short = 'P', long, default_value = "100")]
+    page_size: NonZeroUsize,
+
     /// GitHub owners/organizations of repositories to fetch open issues for
     #[arg(required = true)]
     owners: Vec<String>,
 }
 
-#[derive(Clone, Debug, Eq, Parser, PartialEq)]
-struct Options {
-    batch_size: Option<NonZeroUsize>,
-    infile: Option<InputArg>,
-    outfile: Option<OutputArg>,
-    owners: Vec<String>,
-}
-
-impl From<Arguments> for Options {
-    fn from(args: Arguments) -> Options {
-        let outfile = match (args.outfile, &args.infile, args.no_save) {
-            (Some(f), _, _) => Some(f),
+impl Arguments {
+    fn outfile(&self) -> Option<OutputArg> {
+        match (&self.outfile, &self.infile, self.no_save) {
+            (Some(f), _, _) => Some(f.clone()),
             (None, None, _) => None,
             (None, _, true) => None,
             (None, Some(InputArg::Stdin), false) => Some(OutputArg::Stdout),
             (None, Some(InputArg::Path(p)), false) => Some(OutputArg::Path(p.clone())),
-        };
-        Options {
-            infile: args.infile,
-            outfile,
-            owners: args.owners,
-            batch_size: args.batch_size,
         }
     }
 }
 
 fn main() -> anyhow::Result<()> {
-    let opts = Options::from(Arguments::parse());
-    let mut db = if let Some(infile) = opts.infile {
+    let args = Arguments::parse();
+    let mut db = if let Some(ref infile) = args.infile {
         eprintln!("[·] Loading {infile:#} …");
         Database::load(infile.open()?)?
     } else {
@@ -74,7 +63,7 @@ fn main() -> anyhow::Result<()> {
     };
 
     let mut client = Client::new_with_local_token()?;
-    if let Some(bsz) = opts.batch_size {
+    if let Some(bsz) = args.batch_size {
         client.batch_size(bsz);
     }
     let start_rate_limit = client.get_rate_limit()?;
@@ -82,10 +71,12 @@ fn main() -> anyhow::Result<()> {
     let big_start = Instant::now();
 
     eprintln!("[·] Fetching repositories …");
-    let owner_paginators = opts
-        .owners
-        .into_iter()
-        .map(|owner| (owner.clone(), GetOwnerRepos::new(owner)));
+    let owner_paginators = args.owners.iter().map(|owner| {
+        (
+            owner.clone(),
+            GetOwnerRepos::new(owner.clone(), args.page_size),
+        )
+    });
     let start = Instant::now();
     let repos = client.batch_paginate(owner_paginators)?;
     let elapsed = start.elapsed();
@@ -101,7 +92,10 @@ fn main() -> anyhow::Result<()> {
     eprintln!("[·] Fetching issues …");
     let start = Instant::now();
     let mut repo_qty = 0;
-    let issues = client.batch_paginate(db.issue_paginators().inspect(|_| repo_qty += 1))?;
+    let issues = client.batch_paginate(
+        db.issue_paginators(args.page_size)
+            .inspect(|_| repo_qty += 1),
+    )?;
     let elapsed = start.elapsed();
     let qty: usize = issues.iter().map(|pr| pr.items.len()).sum();
     eprintln!("[·] Fetched {qty} issues from {repo_qty} repositories in {elapsed:?}");
@@ -131,7 +125,7 @@ fn main() -> anyhow::Result<()> {
         eprintln!("[·] Could not determine rate limit points used due to intervening reset");
     }
 
-    if let Some(outfile) = opts.outfile {
+    if let Some(outfile) = args.outfile() {
         eprintln!("[·] Dumping to {outfile:#} …");
         db.dump(outfile.create()?)?;
     }

@@ -1,18 +1,23 @@
-use crate::config::PAGE_SIZE;
 use crate::types::{Issue, RepoWithIssues};
 use gqlient::{Cursor, Id, Page, Paginator, Query, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
+use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetIssues {
     repo_id: Id,
     cursor: Option<Cursor>,
+    page_size: NonZeroUsize,
 }
 
 impl GetIssues {
-    pub(crate) fn new(repo_id: Id, cursor: Option<Cursor>) -> GetIssues {
-        GetIssues { repo_id, cursor }
+    pub(crate) fn new(repo_id: Id, cursor: Option<Cursor>, page_size: NonZeroUsize) -> GetIssues {
+        GetIssues {
+            repo_id,
+            cursor,
+            page_size,
+        }
     }
 }
 
@@ -27,6 +32,7 @@ impl Paginator for GetIssues {
                 Some(c) => Some(c.clone()),
                 None => self.cursor.clone(),
             },
+            self.page_size,
         )
     }
 }
@@ -35,14 +41,16 @@ impl Paginator for GetIssues {
 pub(crate) struct GetIssuesQuery {
     repo_id: Id,
     cursor: Option<Cursor>,
+    page_size: NonZeroUsize,
     prefix: Option<String>,
 }
 
 impl GetIssuesQuery {
-    fn new(repo_id: Id, cursor: Option<Cursor>) -> GetIssuesQuery {
+    fn new(repo_id: Id, cursor: Option<Cursor>, page_size: NonZeroUsize) -> GetIssuesQuery {
         GetIssuesQuery {
             repo_id,
             cursor,
+            page_size,
             prefix: None,
         }
     }
@@ -98,7 +106,7 @@ impl Query for GetIssuesQuery {
         "},
             repo_id_varname = self.repo_id_varname(),
             cursor_varname = self.cursor_varname(),
-            page_size = PAGE_SIZE,
+            page_size = self.page_size,
         )
     }
 

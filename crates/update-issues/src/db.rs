@@ -6,6 +6,7 @@ use serde::{de::Deserializer, Deserialize, Serialize};
 use std::collections::{btree_map::Entry, BTreeMap};
 use std::fmt;
 use std::io;
+use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
@@ -63,14 +64,17 @@ impl Database {
         report
     }
 
-    pub(crate) fn issue_paginators(&self) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
+    pub(crate) fn issue_paginators(
+        &self,
+        page_size: NonZeroUsize,
+    ) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
         self.0
             .iter()
             .filter(|(_, repo)| repo.repository.open_issues != 0)
-            .map(|(id, repo)| {
+            .map(move |(id, repo)| {
                 (
                     id.clone(),
-                    GetIssues::new(id.clone(), repo.issue_cursor.clone()),
+                    GetIssues::new(id.clone(), repo.issue_cursor.clone(), page_size),
                 )
             })
     }
