@@ -6,7 +6,6 @@ use crate::db::{Database, IssueDiff};
 use crate::queries::GetOwnerRepos;
 use clap::Parser;
 use gqlient::{Client, PaginationResults};
-use itertools::Itertools;
 use patharg::{InputArg, OutputArg};
 use std::time::Instant;
 
@@ -87,7 +86,10 @@ fn main() -> anyhow::Result<()> {
     let start = Instant::now();
     let repos = client.batch_paginate(owner_paginators)?;
     let elapsed = start.elapsed();
-    let repos = repos.into_iter().map(|pr| pr.items).concat();
+    let repos = repos
+        .into_iter()
+        .flat_map(|pr| pr.items)
+        .collect::<Vec<_>>();
     eprintln!("[·] Fetched {} repositories in {:?}", repos.len(), elapsed);
 
     let rdiff = db.update_repositories(repos);

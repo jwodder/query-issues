@@ -5,7 +5,6 @@ use crate::queries::{GetIssues, GetOwnerRepos};
 use anyhow::Context;
 use clap::Parser;
 use gqlient::{Client, Ided};
-use itertools::Itertools;
 use serde_jsonlines::WriteExt;
 use std::io::Write;
 use std::time::Instant;
@@ -59,7 +58,10 @@ fn main() -> anyhow::Result<()> {
     let start = Instant::now();
     let issues = client.batch_paginate(issue_queries)?;
     let elapsed = start.elapsed();
-    let issues = issues.into_iter().map(|pr| pr.items).concat();
+    let issues = issues
+        .into_iter()
+        .flat_map(|pr| pr.items)
+        .collect::<Vec<_>>();
     eprintln!("[·] Fetched {} issues in {:?}", issues.len(), elapsed);
 
     eprintln!("[·] Total fetch time: {:?}", big_start.elapsed());

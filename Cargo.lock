@@ -223,15 +223,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b248f5224d1d606005e02c97f5aa4e88eeb230488bcc03bc9ca4d7991399f2b5"
 
 [[package]]
-name = "itertools"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ba291022dbbd398a455acf126c1e341954079855bc60dfdda641363bd6922569"
-dependencies = [
- "either",
-]
-
-[[package]]
 name = "itoa"
 version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -278,7 +269,6 @@ dependencies = [
  "clap",
  "gqlient",
  "indoc",
- "itertools",
  "patharg",
  "serde",
  "serde-jsonlines",
@@ -547,7 +537,6 @@ dependencies = [
  "clap",
  "gqlient",
  "indoc",
- "itertools",
  "patharg",
  "serde",
  "serde_json",
