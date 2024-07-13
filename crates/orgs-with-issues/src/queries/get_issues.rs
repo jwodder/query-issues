@@ -1,4 +1,4 @@
-use crate::types::{Issue, RepoWithIssues};
+use crate::types::{IssueWithLabels, RepoWithIssues};
 use gqlient::{Cursor, Id, Page, Paginator, Query, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
@@ -9,20 +9,27 @@ pub(crate) struct GetIssues {
     repo_id: Id,
     cursor: Option<Cursor>,
     page_size: NonZeroUsize,
+    label_page_size: NonZeroUsize,
 }
 
 impl GetIssues {
-    pub(crate) fn new(repo_id: Id, cursor: Option<Cursor>, page_size: NonZeroUsize) -> GetIssues {
+    pub(crate) fn new(
+        repo_id: Id,
+        cursor: Option<Cursor>,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> GetIssues {
         GetIssues {
             repo_id,
             cursor,
             page_size,
+            label_page_size,
         }
     }
 }
 
 impl Paginator for GetIssues {
-    type Item = Issue;
+    type Item = IssueWithLabels;
     type Query = GetIssuesQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetIssuesQuery {
@@ -33,6 +40,7 @@ impl Paginator for GetIssues {
                 None => self.cursor.clone(),
             },
             self.page_size,
+            self.label_page_size,
         )
     }
 }
@@ -42,15 +50,22 @@ pub(crate) struct GetIssuesQuery {
     repo_id: Id,
     cursor: Option<Cursor>,
     page_size: NonZeroUsize,
+    label_page_size: NonZeroUsize,
     prefix: Option<String>,
 }
 
 impl GetIssuesQuery {
-    fn new(repo_id: Id, cursor: Option<Cursor>, page_size: NonZeroUsize) -> GetIssuesQuery {
+    fn new(
+        repo_id: Id,
+        cursor: Option<Cursor>,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> GetIssuesQuery {
         GetIssuesQuery {
             repo_id,
             cursor,
             page_size,
+            label_page_size,
             prefix: None,
         }
     }
@@ -71,7 +86,7 @@ impl GetIssuesQuery {
 }
 
 impl Query for GetIssuesQuery {
-    type Output = Page<Issue>;
+    type Output = Page<IssueWithLabels>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
         self.prefix = Some(prefix);
@@ -92,11 +107,21 @@ impl Query for GetIssuesQuery {
                         states: [OPEN],
                     ) {{
                         nodes {{
+                            id
                             number
                             title
                             url
                             createdAt
                             updatedAt
+                            labels (first: {label_page_size}) {{
+                                nodes {{
+                                    name
+                                }}
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                }}
+                            }}
                         }}
                         pageInfo {{
                             endCursor
@@ -109,6 +134,7 @@ impl Query for GetIssuesQuery {
             repo_id_varname = self.repo_id_varname(),
             cursor_varname = self.cursor_varname(),
             page_size = self.page_size,
+            label_page_size = self.label_page_size,
         )
     }
 
