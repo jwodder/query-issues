@@ -8,11 +8,20 @@ use std::num::NonZeroUsize;
 pub(crate) struct GetOwnerRepos {
     owner: String,
     page_size: NonZeroUsize,
+    label_page_size: NonZeroUsize,
 }
 
 impl GetOwnerRepos {
-    pub(crate) fn new(owner: String, page_size: NonZeroUsize) -> GetOwnerRepos {
-        GetOwnerRepos { owner, page_size }
+    pub(crate) fn new(
+        owner: String,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> GetOwnerRepos {
+        GetOwnerRepos {
+            owner,
+            page_size,
+            label_page_size,
+        }
     }
 }
 
@@ -21,7 +30,12 @@ impl Paginator for GetOwnerRepos {
     type Query = GetOwnerReposQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetOwnerReposQuery {
-        GetOwnerReposQuery::new(self.owner.clone(), cursor.cloned(), self.page_size)
+        GetOwnerReposQuery::new(
+            self.owner.clone(),
+            cursor.cloned(),
+            self.page_size,
+            self.label_page_size,
+        )
     }
 }
 
@@ -30,15 +44,22 @@ pub(crate) struct GetOwnerReposQuery {
     owner: String,
     cursor: Option<Cursor>,
     page_size: NonZeroUsize,
+    label_page_size: NonZeroUsize,
     prefix: Option<String>,
 }
 
 impl GetOwnerReposQuery {
-    fn new(owner: String, cursor: Option<Cursor>, page_size: NonZeroUsize) -> GetOwnerReposQuery {
+    fn new(
+        owner: String,
+        cursor: Option<Cursor>,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> GetOwnerReposQuery {
         GetOwnerReposQuery {
             owner,
             cursor,
             page_size,
+            label_page_size,
             prefix: None,
         }
     }
@@ -89,9 +110,19 @@ impl Query for GetOwnerReposQuery {
                             states: [OPEN],
                         ) {{
                             nodes {{
+                                id
                                 number
                                 title
                                 url
+                                labels (first: {label_page_size}) {{
+                                    nodes {{
+                                        name
+                                    }}
+                                    pageInfo {{
+                                        endCursor
+                                        hasNextPage
+                                    }}
+                                }}
                             }}
                             pageInfo {{
                                 endCursor
@@ -109,6 +140,7 @@ impl Query for GetOwnerReposQuery {
             owner_varname = self.owner_varname(),
             cursor_varname = self.cursor_varname(),
             page_size = self.page_size,
+            label_page_size = self.label_page_size,
         )
     }
 
