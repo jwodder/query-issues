@@ -218,7 +218,7 @@ impl<K, P: Paginator> PaginationState<K, P> {
 
 // Implementing these traits requires matching bounds on P::Query, which the
 // derive macros don't handle, so the traits can only be implemented manually
-// here — but I don't needs them and that's busywork, so…
+// here — but I don't need them and that's busywork, so…
 //#[derive(Clone, Debug, Eq, PartialEq)]
 struct ActiveQuery<K, P: Paginator> {
     state: PaginationState<K, P>,
