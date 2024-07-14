@@ -37,6 +37,9 @@ many had open issues), the number of open issues fetched, the elapsed time, and
 - `-P <int>`/`--page-size <int>` — Set the number of items to request per page
   of results [default: 100]
 
+- `-R <path>`/`--report-file <path>` — Append a report of the run to the given
+  file as a JSON Lines entry
+
 
 `orgs-with-issues`
 ------------------
@@ -67,6 +70,9 @@ limit points used.
 
 - `-P <int>`/`--page-size <int>` — Set the number of items to request per page
   of results [default: 100]
+
+- `-R <path>`/`--report-file <path>` — Append a report of the run to the given
+  file as a JSON Lines entry
 
 
 `update-issues`
@@ -125,6 +131,9 @@ elapsed time, and (if possible) the number of API rate limit points used.
 
 - `-P <int>`/`--page-size <int>` — Set the number of items to request per page
   of results [default: 100]
+
+- `-R <path>`/`--report-file <path>` — Append a report of the run to the given
+  file as a JSON Lines entry
 
 
 Authentication
