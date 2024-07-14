@@ -274,6 +274,7 @@ dependencies = [
  "anyhow",
  "clap",
  "gqlient",
+ "humantime",
  "indoc",
  "patharg",
  "serde",
