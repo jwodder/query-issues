@@ -149,7 +149,15 @@ pub(crate) struct RepoDiff {
     added: usize,
     modified: usize,
     deleted: usize,
-    closed_issues: usize,
+    pub(crate) closed_issues: usize,
+}
+
+impl RepoDiff {
+    pub(crate) fn repos_touched(&self) -> usize {
+        self.added
+            .saturating_add(self.modified)
+            .saturating_add(self.deleted)
+    }
 }
 
 impl fmt::Display for RepoDiff {
@@ -168,6 +176,14 @@ pub(crate) struct IssueDiff {
     modified: usize,
     open_closed: usize,
     already_closed: usize,
+}
+
+impl IssueDiff {
+    pub(crate) fn issues_touched(&self) -> usize {
+        self.added
+            .saturating_add(self.modified)
+            .saturating_add(self.open_closed)
+    }
 }
 
 impl fmt::Display for IssueDiff {

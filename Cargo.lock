@@ -544,9 +544,11 @@ dependencies = [
  "anyhow",
  "clap",
  "gqlient",
+ "humantime",
  "indoc",
  "patharg",
  "serde",
+ "serde-jsonlines",
  "serde_json",
 ]
 

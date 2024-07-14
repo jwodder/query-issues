@@ -132,6 +132,9 @@ elapsed time, and (if possible) the number of API rate limit points used.
 - `-P <int>`/`--page-size <int>` — Set the number of items to request per page
   of results [default: 100]
 
+- `-R <path>`/`--report-file <path>` — Append a report of the run to the given
+  file as a JSON Lines entry
+
 
 Authentication
 --------------

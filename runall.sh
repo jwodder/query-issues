@@ -10,5 +10,5 @@ done
 
 mkdir -p outputs
 for cmd in "${commands[@]}"
-do cargo run -r -p "$cmd" -- -o "outputs/$cmd.json" "${orgs[@]}"
+do cargo run -r -p "$cmd" -- -o "outputs/$cmd.json" -R outputs/stats.json "${orgs[@]}"
 done
