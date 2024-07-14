@@ -1,6 +1,7 @@
 use crate::queries::GetLabels;
 use gqlient::{Cursor, Id, Page, Singleton};
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -45,18 +46,30 @@ impl From<RawRepoDetails> for RepoWithIssues {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub(crate) struct Issue {
+pub(crate) struct Issue<L> {
     pub(crate) repo: String,
     pub(crate) number: u64,
     pub(crate) title: String,
-    pub(crate) labels: Vec<String>,
+    pub(crate) labels: Vec<L>,
     pub(crate) url: String,
+}
+
+impl Issue<Id> {
+    pub(crate) fn name_labels(self, names: &HashMap<Id, String>) -> Issue<String> {
+        Issue {
+            repo: self.repo,
+            number: self.number,
+            title: self.title,
+            labels: self.labels.iter().map(|id| names[id].clone()).collect(),
+            url: self.url,
+        }
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct IssueWithLabels {
     pub(crate) issue_id: Id,
-    pub(crate) issue: Issue,
+    pub(crate) issue: Issue<Id>,
     pub(crate) labels_cursor: Option<Cursor>,
     pub(crate) has_more_labels: bool,
 }
@@ -85,5 +98,5 @@ struct RawIssue {
     number: u64,
     title: String,
     url: String,
-    labels: Page<Singleton<String>>,
+    labels: Page<Singleton<Id>>,
 }

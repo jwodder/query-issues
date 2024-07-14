@@ -113,7 +113,7 @@ impl Query for GetIssuesQuery {
                             url
                             labels (first: {label_page_size}) {{
                                 nodes {{
-                                    name
+                                    id
                                 }}
                                 pageInfo {{
                                     endCursor

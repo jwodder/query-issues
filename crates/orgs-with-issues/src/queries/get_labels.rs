@@ -25,7 +25,7 @@ impl GetLabels {
 }
 
 impl Paginator for GetLabels {
-    type Item = String;
+    type Item = Id;
     type Query = GetLabelsQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetLabelsQuery {
@@ -74,7 +74,7 @@ impl GetLabelsQuery {
 }
 
 impl Query for GetLabelsQuery {
-    type Output = Page<String>;
+    type Output = Page<Id>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
         self.prefix = Some(prefix);
@@ -92,7 +92,7 @@ impl Query for GetLabelsQuery {
                         after: ${cursor_varname},
                     ) {{
                         nodes {{
-                            name
+                            id
                         }}
                         pageInfo {{
                             endCursor
@@ -128,7 +128,7 @@ impl Query for GetLabelsQuery {
     }
 
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error> {
-        let page = serde_json::from_value::<Singleton<Page<Singleton<String>>>>(value)?.0;
+        let page = serde_json::from_value::<Singleton<Page<Singleton<Id>>>>(value)?.0;
         Ok(Page {
             items: page.items.into_iter().map(|lb| lb.0).collect(),
             end_cursor: page.end_cursor,

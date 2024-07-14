@@ -5,8 +5,7 @@ pub use crate::types::*;
 use anyhow::Context;
 use indenter::indented;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
-use std::collections::{hash_map::Entry, HashMap};
+use std::collections::{HashMap, VecDeque};
 use std::fmt::Write;
 use std::num::NonZeroUsize;
 use ureq::{Agent, AgentBuilder};
@@ -88,6 +87,49 @@ impl Client {
         }
     }
 
+    pub fn batch_query<K, Q, I>(&self, queries: I) -> anyhow::Result<Vec<(K, Q::Output)>>
+    where
+        Q: Query,
+        I: IntoIterator<Item = (K, Q)>,
+    {
+        let mut queries = queries.into_iter().collect::<VecDeque<_>>();
+        let mut results = Vec::new();
+        while !queries.is_empty() {
+            let mut active = HashMap::new();
+            let mut variables = JsonMap::new();
+            let mut varstr = String::new();
+            let mut qstr = String::new();
+            let mut qwrite = indented(&mut qstr).with_str("    ");
+            for (i, (key, query)) in queries
+                .drain(0..(queries.len().min(self.batch_size.get())))
+                .enumerate()
+            {
+                let alias = format!("q{i}");
+                let query = query.with_variable_prefix(alias.clone());
+                for (name, Variable { gql_type, value }) in query.variables() {
+                    if i > 0 {
+                        write!(&mut varstr, ", ")?;
+                    }
+                    write!(&mut varstr, "${name}: {gql_type}")?;
+                    variables.insert(name, value);
+                }
+                write!(&mut qwrite, "{alias}: ")?;
+                query.write_graphql(&mut qwrite)?;
+                active.insert(alias, (key, query));
+            }
+            let full_query = format!("query ({varstr}) {{\n{qstr}}}\n");
+            let data = self.query(full_query, variables)?;
+            for (alias, value) in data {
+                let Some((key, query)) = active.remove(&alias) else {
+                    // TODO: Warn or error
+                    continue;
+                };
+                results.push((key, query.parse_response(value)?));
+            }
+        }
+        Ok(results)
+    }
+
     pub fn batch_paginate<K, Q, I>(
         &self,
         queries: I,
@@ -130,11 +172,11 @@ impl Client {
             let full_query = format!("query ({varstr}) {{\n{qstr}}}\n");
             let data = self.query(full_query, variables)?;
             for (alias, value) in data {
-                let Entry::Occupied(aqo) = active.entry(alias) else {
+                let Some(acq) = active.remove(&alias) else {
                     // TODO: Warn or error
                     continue;
                 };
-                let state = aqo.remove().process_response(value)?;
+                let state = acq.process_response(value)?;
                 if state.has_next_page {
                     in_progress.push_back(state);
                 } else {

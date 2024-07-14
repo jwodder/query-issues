@@ -1,13 +1,13 @@
 mod queries;
 mod types;
-use crate::queries::{GetIssues, GetOwnerRepos};
+use crate::queries::{GetIssues, GetLabelName, GetOwnerRepos};
 use crate::types::Issue;
 use anyhow::Context;
 use clap::Parser;
 use gqlient::{Client, Id, Ided, DEFAULT_BATCH_SIZE};
 use serde::Serialize;
 use serde_jsonlines::{append_json_lines, WriteExt};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -53,7 +53,8 @@ fn main() -> anyhow::Result<()> {
     let timestamp = SystemTime::now();
     let mut repo_qty = 0;
     let mut repos_with_issues_qty: usize = 0;
-    let mut issues = HashMap::<Id, Issue>::new();
+    let mut issues = HashMap::<Id, Issue<Id>>::new();
+    let mut label_ids = HashSet::new();
 
     eprintln!("[·] Fetching repositories …");
     let owner_queries = args.owners.clone().into_iter().map(|owner| {
@@ -74,6 +75,7 @@ fn main() -> anyhow::Result<()> {
             repos_with_issues_qty += 1;
             for iwl in repo.issues {
                 label_queries.extend(iwl.more_labels_query(args.label_page_size));
+                label_ids.extend(iwl.issue.labels.iter().cloned());
                 issues.insert(iwl.issue_id, iwl.issue);
             }
         }
@@ -102,8 +104,9 @@ fn main() -> anyhow::Result<()> {
         let elapsed = start.elapsed();
         let mut issue_qty = 0;
         for iwl in more_issues.into_iter().flat_map(|pr| pr.items) {
-            label_queries.extend(iwl.more_labels_query(args.label_page_size));
             issue_qty += 1;
+            label_queries.extend(iwl.more_labels_query(args.label_page_size));
+            label_ids.extend(iwl.issue.labels.iter().cloned());
             issues.insert(iwl.issue_id, iwl.issue);
         }
         eprintln!("[·] Fetched {issue_qty} more issues in {elapsed:?}");
@@ -111,7 +114,7 @@ fn main() -> anyhow::Result<()> {
 
     let issues_with_extra_labels = label_queries.len();
     if !label_queries.is_empty() {
-        eprintln!("[·] Fetching more labels for {issues_with_extra_labels} issues …",);
+        eprintln!("[·] Fetching more labels for {issues_with_extra_labels} issues …");
         let start = Instant::now();
         let more_labels = client.batch_paginate(label_queries)?;
         let elapsed = start.elapsed();
@@ -127,11 +130,27 @@ fn main() -> anyhow::Result<()> {
         eprintln!("[·] Fetched {label_qty} more labels in {elapsed:?}");
     }
 
-    let elapsed = big_start.elapsed();
+    let label_qty = label_ids.len();
+    eprintln!("[·] Fetching names for {label_qty} labels …");
+    let start = Instant::now();
+    let label_names = client.batch_query(
+        label_ids
+            .into_iter()
+            .map(|lid| (lid.clone(), GetLabelName::new(lid))),
+    )?;
+    eprintln!("[·] Fetched label names in {:?}", start.elapsed());
+
+    let label_names = HashMap::from_iter(label_names);
+    let issues = issues
+        .into_values()
+        .map(|iss| iss.name_labels(&label_names))
+        .collect::<Vec<_>>();
+
+    let big_elapsed = big_start.elapsed();
     eprintln!(
         "[·] Total of {} issues fetched in {:?}",
         issues.len(),
-        elapsed
+        big_elapsed
     );
 
     let end_rate_limit = client.get_rate_limit()?;
@@ -161,7 +180,8 @@ fn main() -> anyhow::Result<()> {
             open_issues: issues.len(),
             repos_with_open_issues: repos_with_issues_qty,
             issues_with_extra_labels,
-            elapsed,
+            labels: label_qty,
+            elapsed: big_elapsed,
             rate_limit_points,
         };
         append_json_lines(report_file, std::iter::once(report))
@@ -171,7 +191,7 @@ fn main() -> anyhow::Result<()> {
     if let Some(outfile) = args.outfile {
         eprintln!("[·] Dumping to {outfile:#} …");
         let mut fp = outfile.create().context("failed to open file")?;
-        fp.write_json_lines(issues.values())
+        fp.write_json_lines(issues)
             .context("failed to dump issues")?;
         fp.flush().context("failed to flush filehandle")?;
     }
@@ -190,6 +210,7 @@ struct Report {
     open_issues: usize,
     repos_with_open_issues: usize,
     issues_with_extra_labels: usize,
+    labels: usize,
     elapsed: Duration,
     rate_limit_points: Option<u32>,
 }
