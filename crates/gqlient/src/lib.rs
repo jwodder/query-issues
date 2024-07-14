@@ -14,7 +14,7 @@ use ureq::{Agent, AgentBuilder};
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
 static RATE_LIMIT_URL: &str = "https://api.github.com/rate_limit";
 
-const DEFAULT_BATCH_SIZE: usize = 50;
+pub const DEFAULT_BATCH_SIZE: usize = 50;
 
 #[derive(Clone, Debug)]
 pub struct Client {
