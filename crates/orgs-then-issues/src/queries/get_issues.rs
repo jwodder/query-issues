@@ -59,7 +59,7 @@ impl GetIssuesQuery {
 }
 
 impl Query for GetIssuesQuery {
-    type Item = Page<Issue>;
+    type Output = Page<Issue>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
         self.prefix = Some(prefix);

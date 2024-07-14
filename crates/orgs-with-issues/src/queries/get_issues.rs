@@ -71,7 +71,7 @@ impl GetIssuesQuery {
 }
 
 impl Query for GetIssuesQuery {
-    type Item = Page<Issue>;
+    type Output = Page<Issue>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
         self.prefix = Some(prefix);
@@ -129,7 +129,7 @@ impl Query for GetIssuesQuery {
         ]
     }
 
-    fn parse_response(&self, value: serde_json::Value) -> Result<Self::Item, serde_json::Error> {
+    fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error> {
         let raw = serde_json::from_value::<RepoWithIssues>(value)?;
         Ok(Page {
             items: raw.issues,

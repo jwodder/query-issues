@@ -59,7 +59,7 @@ impl GetOwnerReposQuery {
 }
 
 impl Query for GetOwnerReposQuery {
-    type Item = Page<Ided<RepoWithIssues>>;
+    type Output = Page<Ided<RepoWithIssues>>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
         self.prefix = Some(prefix);
@@ -131,7 +131,7 @@ impl Query for GetOwnerReposQuery {
         ]
     }
 
-    fn parse_response(&self, value: serde_json::Value) -> Result<Self::Item, serde_json::Error> {
-        serde_json::from_value::<Singleton<Self::Item>>(value).map(|r| r.0)
+    fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error> {
+        serde_json::from_value::<Singleton<Self::Output>>(value).map(|r| r.0)
     }
 }

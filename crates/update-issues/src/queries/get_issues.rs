@@ -69,7 +69,7 @@ impl GetIssuesQuery {
 }
 
 impl Query for GetIssuesQuery {
-    type Item = Page<Ided<Issue>>;
+    type Output = Page<Ided<Issue>>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
         self.prefix = Some(prefix);
@@ -133,7 +133,7 @@ impl Query for GetIssuesQuery {
         ]
     }
 
-    fn parse_response(&self, value: serde_json::Value) -> Result<Self::Item, serde_json::Error> {
-        serde_json::from_value::<Singleton<Self::Item>>(value).map(|r| r.0)
+    fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error> {
+        serde_json::from_value::<Singleton<Self::Output>>(value).map(|r| r.0)
     }
 }
