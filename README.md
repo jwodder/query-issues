@@ -52,9 +52,13 @@ repository, the first page of open issues is also queried at the same time.
 Then, all repositories that still have more open issues are queried repeatedly
 in batches to get their remaining pages of open issues.
 
-The key difference from `orgs-then-issues` is that this command fetches a page
-of issues for each repository as part of the same requests that fetch the
-repositories themselves.
+When querying issues, the first 10 (by default) labels are retrieved for each
+issue.  If any issue has more than this many labels, the remaining labels are
+queried in batches at this point.
+
+The key difference from `orgs-then-issues` is that this command fetches an
+initial page of issues for each repository as part of the same requests that
+fetch the repositories themselves.
 
 The program logs to stderr the number of repositories fetched, the number of
 open issues fetched, the elapsed time, and (if possible) the number of API rate
@@ -64,6 +68,9 @@ limit points used.
 
 - `-B <int>`/`--batch-size <int>` — Set the number of sub-queries to make per
   GraphQL request [default: 50]
+
+- `-L <int>`/`--label-page-size <int>` — Set the number of labels to request
+  per page [default: 10]
 
 - `-o <path>`/`--outfile <path>` — Dump fetched issue information to the given
   file as JSON Lines.  `<path>` may be `-` to write to standard output.
