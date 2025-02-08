@@ -22,6 +22,10 @@ getting the number of open issues in each repository.  Then, all repositories
 that have one or more open issues are queried in batches to get paginated lists
 of their open issues.
 
+When querying issues, the first 10 (by default) labels are retrieved for each
+issue.  If any issue has more than this many labels, the remaining labels are
+queried in batches at this point.
+
 The program logs to stderr the number of repositories fetched (including how
 many had open issues), the number of open issues fetched, the elapsed time, and
 (if possible) the number of API rate limit points used.
@@ -30,6 +34,9 @@ many had open issues), the number of open issues fetched, the elapsed time, and
 
 - `-B <int>`/`--batch-size <int>` — Set the number of sub-queries to make per
   GraphQL request [default: 50]
+
+- `-L <int>`/`--label-page-size <int>` — Set the number of labels to request
+  per page [default: 10]
 
 - `-o <path>`/`--outfile <path>` — Dump fetched issue information to the given
   file as JSON Lines.  `<path>` may be `-` to write to standard output.
