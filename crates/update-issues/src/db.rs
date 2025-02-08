@@ -67,6 +67,7 @@ impl Database {
     pub(crate) fn issue_paginators(
         &self,
         page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
     ) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
         self.0
             .iter()
@@ -74,7 +75,12 @@ impl Database {
             .map(move |(id, repo)| {
                 (
                     id.clone(),
-                    GetIssues::new(id.clone(), repo.issue_cursor.clone(), page_size),
+                    GetIssues::new(
+                        id.clone(),
+                        repo.issue_cursor.clone(),
+                        page_size,
+                        label_page_size,
+                    ),
                 )
             })
     }
@@ -93,28 +99,23 @@ impl RepoWithIssues {
         self.issue_cursor = cursor;
     }
 
-    pub(crate) fn update_issues<I>(&mut self, issues: I) -> IssueDiff
-    where
-        I: IntoIterator<Item = Ided<Issue>>,
-    {
+    pub(crate) fn update_issue(&mut self, issue_id: Id, issue: Issue) -> IssueDiff {
         let mut report = IssueDiff::default();
-        for Ided { id, data: iss } in issues {
-            match self.issues.entry(id) {
-                Entry::Occupied(o) if iss.state == IssueState::Closed => {
-                    report.open_closed += 1;
-                    o.remove();
+        match self.issues.entry(issue_id) {
+            Entry::Occupied(o) if issue.state == IssueState::Closed => {
+                report.open_closed += 1;
+                o.remove();
+            }
+            Entry::Vacant(_) if issue.state == IssueState::Closed => report.already_closed += 1,
+            Entry::Occupied(mut o) => {
+                if o.get() != &issue {
+                    report.modified += 1;
+                    o.insert(issue);
                 }
-                Entry::Vacant(_) if iss.state == IssueState::Closed => report.already_closed += 1,
-                Entry::Occupied(mut o) => {
-                    if o.get() != &iss {
-                        report.modified += 1;
-                        o.insert(iss);
-                    }
-                }
-                Entry::Vacant(v) => {
-                    report.added += 1;
-                    v.insert(iss);
-                }
+            }
+            Entry::Vacant(v) => {
+                report.added += 1;
+                v.insert(issue);
             }
         }
         report
