@@ -21,6 +21,10 @@ pub(crate) struct Issue {
     //pub(crate) labels: Vec<String>,
     pub(crate) state: IssueState,
     pub(crate) url: String,
+    #[serde(rename = "createdAt")]
+    pub(crate) created: String,
+    #[serde(rename = "updatedAt")]
+    pub(crate) updated: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
