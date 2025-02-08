@@ -95,6 +95,8 @@ impl Query for GetIssuesQuery {
                             number
                             title
                             url
+                            createdAt
+                            updatedAt
                         }}
                         pageInfo {{
                             endCursor

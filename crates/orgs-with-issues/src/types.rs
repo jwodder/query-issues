@@ -28,6 +28,8 @@ impl From<RawRepoDetails> for RepoWithIssues {
                     number: ri.number,
                     title: ri.title,
                     url: ri.url,
+                    created: ri.created_at,
+                    updated: ri.updated_at,
                 })
                 .collect(),
             issue_cursor: value.issues.end_cursor,
@@ -45,11 +47,16 @@ pub(crate) struct Issue {
     // Note: Reportedly, the max number of labels on an issue is 100
     //pub(crate) labels: Vec<String>,
     pub(crate) url: String,
+    pub(crate) created: String,
+    pub(crate) updated: String,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
 struct RawIssue {
     number: u64,
     title: String,
     url: String,
+    created_at: String,
+    updated_at: String,
 }

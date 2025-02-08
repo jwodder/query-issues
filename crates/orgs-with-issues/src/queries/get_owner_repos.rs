@@ -92,6 +92,8 @@ impl Query for GetOwnerReposQuery {
                                 number
                                 title
                                 url
+                                createdAt
+                                updatedAt
                             }}
                             pageInfo {{
                                 endCursor
