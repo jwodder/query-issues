@@ -111,6 +111,10 @@ open issues are queried, but the query starts from the beginning of time.  The
 issues thus fetched are then added or (for closed issues) removed from the
 database as appropriate.
 
+When querying issues, the first 10 (by default) labels are retrieved for each
+issue.  If any issue has more than this many labels, the remaining labels are
+queried in batches at this point.
+
 `update-issues` logs to stderr the number of repositories fetched (including
 how many had open issues), the number of open issues fetched, the numbers of
 repositories & issues in the database that were added/modified/removed, the

@@ -3,12 +3,14 @@ mod queries;
 mod types;
 use crate::db::{Database, IssueDiff};
 use crate::queries::GetOwnerRepos;
+use crate::types::Issue;
 use anyhow::Context;
 use clap::Parser;
-use gqlient::{Client, PaginationResults, DEFAULT_BATCH_SIZE};
+use gqlient::{Client, Id, PaginationResults, DEFAULT_BATCH_SIZE};
 use patharg::{InputArg, OutputArg};
 use serde::Serialize;
 use serde_jsonlines::append_json_lines;
+use std::collections::HashMap;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
@@ -23,6 +25,10 @@ struct Arguments {
     /// Load the initial database state from the given file
     #[arg(short, long)]
     infile: Option<InputArg>,
+
+    /// Number of labels to request per page
+    #[arg(short = 'L', long, default_value = "10")]
+    label_page_size: NonZeroUsize,
 
     /// Do not write the updated database state to `--infile`
     ///
@@ -102,27 +108,64 @@ fn main() -> anyhow::Result<()> {
     eprintln!("[·] Fetching issues …");
     let start = Instant::now();
     let mut repo_qty = 0;
-    let issues = client.batch_paginate(
-        db.issue_paginators(args.page_size)
+    let more_issues = client.batch_paginate(
+        db.issue_paginators(args.page_size, args.label_page_size)
             .inspect(|_| repo_qty += 1),
     )?;
     let elapsed = start.elapsed();
-    let qty: usize = issues.iter().map(|pr| pr.items.len()).sum();
+    let qty: usize = more_issues.iter().map(|pr| pr.items.len()).sum();
     eprintln!("[·] Fetched {qty} issues from {repo_qty} repositories in {elapsed:?}");
 
-    let mut idiff = IssueDiff::default();
+    // The first Id is the issue ID; the second Id is the ID of the repo the
+    // issue belongs to.
+    let mut issues = HashMap::<Id, (Id, Issue)>::new();
+    let mut label_queries = Vec::new();
+    let mut issue_qty = 0;
     for PaginationResults {
         key: repo_id,
         items,
         end_cursor,
-    } in issues
+    } in more_issues
     {
         let Some(repo) = db.get_mut(&repo_id) else {
             // TODO: Warn? Error?
             continue;
         };
         repo.set_issue_cursor(end_cursor);
-        idiff += repo.update_issues(items);
+        for iwl in items {
+            label_queries.extend(iwl.more_labels_query(args.label_page_size));
+            issue_qty += 1;
+            issues.insert(iwl.issue_id, (repo_id.clone(), iwl.issue));
+        }
+    }
+    eprintln!("[·] Fetched {issue_qty} issues in {elapsed:?}");
+
+    let issues_with_extra_labels = label_queries.len();
+    if !label_queries.is_empty() {
+        eprintln!("[·] Fetching more labels for {issues_with_extra_labels} issues …",);
+        let start = Instant::now();
+        let more_labels = client.batch_paginate(label_queries)?;
+        let elapsed = start.elapsed();
+        let mut label_qty = 0;
+        for res in more_labels {
+            label_qty += res.items.len();
+            issues
+                .get_mut(&res.key)
+                .expect("Issues we get labels for should have already been seen")
+                .1
+                .labels
+                .extend(res.items);
+        }
+        eprintln!("[·] Fetched {label_qty} more labels in {elapsed:?}");
+    }
+
+    let mut idiff = IssueDiff::default();
+    for (issue_id, (repo_id, issue)) in issues {
+        let Some(repo) = db.get_mut(&repo_id) else {
+            // TODO: Warn? Error?
+            continue;
+        };
+        idiff += repo.update_issue(issue_id, issue);
     }
     eprintln!("[·] {idiff}");
 
@@ -150,10 +193,12 @@ fn main() -> anyhow::Result<()> {
                     None => DEFAULT_BATCH_SIZE,
                 },
                 page_size: args.page_size,
+                label_page_size: args.label_page_size,
             },
             repositories: all_repos_qty,
             open_issues: qty,
             repos_with_open_issues: repo_qty,
+            issues_with_extra_labels,
             repos_updated: rdiff.repos_touched(),
             issues_updated: rdiff.closed_issues.saturating_add(idiff.issues_touched()),
             elapsed: big_elapsed,
@@ -181,6 +226,7 @@ struct Report {
     repositories: usize,
     open_issues: usize,
     repos_with_open_issues: usize,
+    issues_with_extra_labels: usize,
     repos_updated: usize,
     issues_updated: usize,
     elapsed: Duration,
@@ -188,7 +234,9 @@ struct Report {
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize)]
+#[allow(clippy::struct_field_names)]
 struct Parameters {
     batch_size: usize,
     page_size: NonZeroUsize,
+    label_page_size: NonZeroUsize,
 }

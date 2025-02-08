@@ -1,5 +1,5 @@
-use crate::types::Issue;
-use gqlient::{Cursor, Id, Ided, Page, Paginator, Query, Singleton, Variable};
+use crate::types::IssueWithLabels;
+use gqlient::{Cursor, Id, Page, Paginator, Query, Singleton, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
@@ -9,23 +9,30 @@ pub(crate) struct GetIssues {
     repo_id: Id,
     cursor: Option<Cursor>,
     page_size: NonZeroUsize,
+    label_page_size: NonZeroUsize,
     include_closed: bool,
 }
 
 impl GetIssues {
-    pub(crate) fn new(repo_id: Id, cursor: Option<Cursor>, page_size: NonZeroUsize) -> GetIssues {
+    pub(crate) fn new(
+        repo_id: Id,
+        cursor: Option<Cursor>,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> GetIssues {
         let include_closed = cursor.is_some();
         GetIssues {
             repo_id,
             cursor,
             page_size,
+            label_page_size,
             include_closed,
         }
     }
 }
 
 impl Paginator for GetIssues {
-    type Item = Ided<Issue>;
+    type Item = IssueWithLabels;
     type Query = GetIssuesQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetIssuesQuery {
@@ -37,6 +44,7 @@ impl Paginator for GetIssues {
             repo_id: self.repo_id.clone(),
             cursor,
             page_size: self.page_size,
+            label_page_size: self.label_page_size,
             include_closed: self.include_closed,
             prefix: None,
         }
@@ -48,6 +56,7 @@ pub(crate) struct GetIssuesQuery {
     repo_id: Id,
     cursor: Option<Cursor>,
     page_size: NonZeroUsize,
+    label_page_size: NonZeroUsize,
     include_closed: bool,
     prefix: Option<String>,
 }
@@ -69,7 +78,7 @@ impl GetIssuesQuery {
 }
 
 impl Query for GetIssuesQuery {
-    type Output = Page<Ided<Issue>>;
+    type Output = Page<IssueWithLabels>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
         self.prefix = Some(prefix);
@@ -96,6 +105,15 @@ impl Query for GetIssuesQuery {
                             url
                             createdAt
                             updatedAt
+                            labels (first: {label_page_size}) {{
+                                nodes {{
+                                    name
+                                }}
+                                pageInfo {{
+                                    endCursor
+                                    hasNextPage
+                                }}
+                            }}
                         }}
                         pageInfo {{
                             endCursor
@@ -108,6 +126,7 @@ impl Query for GetIssuesQuery {
             repo_id_varname = self.repo_id_varname(),
             cursor_varname = self.cursor_varname(),
             page_size = self.page_size,
+            label_page_size = self.label_page_size,
             states = if self.include_closed {
                 "OPEN, CLOSED"
             } else {
