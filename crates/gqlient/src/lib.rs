@@ -7,7 +7,14 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::num::NonZeroUsize;
 use thiserror::Error;
-use ureq::{Agent, AgentBuilder};
+use ureq::{
+    http::{
+        header::{HeaderValue, InvalidHeaderValue},
+        Request,
+    },
+    middleware::MiddlewareNext,
+    Agent, SendBody,
+};
 
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
 static RATE_LIMIT_URL: &str = "https://api.github.com/rate_limit";
@@ -22,47 +29,51 @@ pub struct Client {
 }
 
 impl Client {
-    pub fn new(token: &str) -> Client {
-        let auth = format!("Bearer {token}");
-        let inner = AgentBuilder::new()
+    pub fn new(token: &str) -> Result<Client, BuildClientError> {
+        let auth = HeaderValue::from_str(&format!("Bearer {token}"))?;
+        let inner = Agent::config_builder()
             .https_only(true)
-            .middleware(move |req: ureq::Request, next: ureq::MiddlewareNext<'_>| {
-                next.handle(
-                    req.set("Authorization", &auth)
-                        .set("X-Github-Next-Global-ID", "1"),
-                )
-            })
-            .build();
-        Client { inner }
+            .middleware(
+                move |mut req: Request<SendBody<'_>>, next: MiddlewareNext<'_>| {
+                    let _ = req.headers_mut().insert("Authorization", auth.clone());
+                    let _ = req
+                        .headers_mut()
+                        .insert("X-Github-Next-Global-ID", HeaderValue::from_static("1"));
+                    next.handle(req)
+                },
+            )
+            .build()
+            .into();
+        Ok(Client { inner })
     }
 
-    pub fn new_with_local_token() -> Result<Client, TokenError> {
+    pub fn new_with_local_token() -> Result<Client, BuildClientError> {
         let token = gh_token::get()?;
-        Ok(Client::new(&token))
+        Client::new(&token)
     }
 
     pub fn get_rate_limit(&self) -> Result<RateLimit, RateLimitError> {
-        let mut r = self
+        let bytes = self
             .inner
             .get(RATE_LIMIT_URL)
             .call()
-            .map_err(Box::new)?
-            .into_reader();
-        let mut bytes = Vec::new();
-        r.read_to_end(&mut bytes)?;
+            .map_err(|e| RateLimitError::Http(Box::new(e)))?
+            .into_body()
+            .read_to_vec()
+            .map_err(|e| RateLimitError::Read(Box::new(e)))?;
         let r = serde_json::from_slice::<RateLimitResponse>(&bytes)?;
         Ok(r.resources.graphql)
     }
 
     pub fn query(&self, payload: QueryPayload) -> Result<JsonMap, QueryError> {
-        let mut r = self
+        let bytes = self
             .inner
             .post(GRAPHQL_API_URL)
             .send_json(payload)
-            .map_err(Box::new)?
-            .into_reader();
-        let mut bytes = Vec::new();
-        r.read_to_end(&mut bytes)?;
+            .map_err(|e| QueryError::Http(Box::new(e)))?
+            .into_body()
+            .read_to_vec()
+            .map_err(|e| QueryError::Read(Box::new(e)))?;
         serde_json::from_slice::<Response>(&bytes)?
             .into_data()
             .map_err(Into::into)
@@ -126,15 +137,19 @@ impl<Q: QueryMachine> Iterator for QueryResults<'_, Q> {
 }
 
 #[derive(Debug, Error)]
-#[error("failed to fetch GitHub access token")]
-pub struct TokenError(#[from] gh_token::Error);
+pub enum BuildClientError {
+    #[error("invalid authorization token")]
+    Auth(#[from] InvalidHeaderValue),
+    #[error("failed to fetch GitHub access token")]
+    GetToken(#[from] gh_token::Error),
+}
 
 #[derive(Debug, Error)]
 pub enum RateLimitError {
     #[error("failed to perform rate limit request")]
-    Http(#[from] Box<ureq::Error>),
+    Http(#[source] Box<ureq::Error>),
     #[error("failed to read rate limit response")]
-    Read(#[from] std::io::Error),
+    Read(#[source] Box<ureq::Error>),
     #[error("failed to deserialize rate limit response")]
     Json(#[from] serde_json::Error),
 }
@@ -142,9 +157,9 @@ pub enum RateLimitError {
 #[derive(Debug, Error)]
 pub enum QueryError {
     #[error("failed to perform GraphQL request")]
-    Http(#[from] Box<ureq::Error>),
+    Http(#[source] Box<ureq::Error>),
     #[error("failed to read GraphQL response")]
-    Read(#[from] std::io::Error),
+    Read(#[source] Box<ureq::Error>),
     #[error("failed to deserialize GraphQL response")]
     Json(#[from] serde_json::Error),
     #[error("GraphQL server returned error response")]
