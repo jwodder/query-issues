@@ -1,5 +1,5 @@
 use crate::queries::{GetIssues, GetLabels, GetOwnerRepos};
-use crate::types::{Issue, Repository};
+use crate::types::Issue;
 use gqlient::{BatchPaginator, Id, Ided, JsonMap, QueryMachine, QueryPayload};
 use serde::Serialize;
 use std::collections::HashMap;
@@ -45,7 +45,7 @@ impl QueryMachine for OrgsThenIssues {
                 let start = Instant::now();
                 self.state = State::FetchRepos {
                     submachine: std::mem::take(submachine),
-                    repos: Vec::new(),
+                    issue_queries: Vec::new(),
                     start,
                 };
                 self.results
@@ -54,7 +54,7 @@ impl QueryMachine for OrgsThenIssues {
             }
             State::FetchRepos {
                 submachine,
-                repos,
+                issue_queries,
                 start,
             } => {
                 let query = submachine.get_next_query();
@@ -62,29 +62,16 @@ impl QueryMachine for OrgsThenIssues {
                     query
                 } else {
                     let elapsed = start.elapsed();
-                    let mut issue_queries = Vec::new();
-                    for Ided { id, data: repo } in std::mem::take(repos) {
-                        self.report.repositories += 1;
-                        if repo.open_issues > 0 {
-                            self.report.repos_with_open_issues += 1;
-                            issue_queries.push((
-                                id.clone(),
-                                GetIssues::new(
-                                    id,
-                                    self.parameters.page_size,
-                                    self.parameters.label_page_size,
-                                ),
-                            ));
-                        }
-                    }
                     self.results
                         .push(Output::Transition(Transition::EndFetchRepos {
                             repo_qty: self.report.repositories,
                             repos_with_issues_qty: self.report.repos_with_open_issues,
                             elapsed,
                         }));
-                    let mut submachine =
-                        BatchPaginator::new(issue_queries, self.parameters.batch_size);
+                    let mut submachine = BatchPaginator::new(
+                        std::mem::take(issue_queries),
+                        self.parameters.batch_size,
+                    );
                     let query = submachine.get_next_query();
                     if query.is_some() {
                         self.results
@@ -136,7 +123,6 @@ impl QueryMachine for OrgsThenIssues {
                             submachine,
                             start,
                             issues: std::mem::take(issues),
-                            label_qty: 0,
                         };
                         query
                     } else {
@@ -153,7 +139,6 @@ impl QueryMachine for OrgsThenIssues {
                 submachine,
                 start,
                 issues,
-                label_qty,
             } => {
                 let query = submachine.get_next_query();
                 if query.is_some() {
@@ -162,7 +147,7 @@ impl QueryMachine for OrgsThenIssues {
                     let elapsed = start.elapsed();
                     self.results
                         .push(Output::Transition(Transition::EndFetchLabels {
-                            label_qty: *label_qty,
+                            label_qty: self.report.extra_labels,
                             elapsed,
                         }));
                     self.results.push(Output::Issues(
@@ -183,10 +168,27 @@ impl QueryMachine for OrgsThenIssues {
                 panic!("handle_response() called before get_next_query()")
             }
             State::FetchRepos {
-                submachine, repos, ..
+                submachine,
+                issue_queries,
+                ..
             } => {
                 submachine.handle_response(data)?;
-                repos.extend(submachine.get_output().into_iter().flat_map(|pr| pr.items));
+                for Ided { id, data: repo } in
+                    submachine.get_output().into_iter().flat_map(|pr| pr.items)
+                {
+                    self.report.repositories += 1;
+                    if repo.open_issues > 0 {
+                        self.report.repos_with_open_issues += 1;
+                        issue_queries.push((
+                            id.clone(),
+                            GetIssues::new(
+                                id,
+                                self.parameters.page_size,
+                                self.parameters.label_page_size,
+                            ),
+                        ));
+                    }
+                }
             }
             State::FetchIssues {
                 submachine,
@@ -195,21 +197,26 @@ impl QueryMachine for OrgsThenIssues {
                 ..
             } => {
                 submachine.handle_response(data)?;
+                let mut issues_out = Vec::new();
                 for iwl in submachine.get_output().into_iter().flat_map(|pr| pr.items) {
-                    label_queries.extend(iwl.more_labels_query(self.parameters.label_page_size));
                     self.report.open_issues += 1;
-                    issues.insert(iwl.issue_id, iwl.issue);
+                    if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size) {
+                        label_queries.push(q);
+                        issues.insert(iwl.issue_id, iwl.issue);
+                    } else {
+                        issues_out.push(iwl.issue);
+                    }
+                }
+                if !issues_out.is_empty() {
+                    self.results.push(Output::Issues(issues_out));
                 }
             }
             State::FetchLabels {
-                submachine,
-                issues,
-                label_qty,
-                ..
+                submachine, issues, ..
             } => {
                 submachine.handle_response(data)?;
                 for res in submachine.get_output() {
-                    *label_qty += res.items.len();
+                    self.report.extra_labels += res.items.len();
                     issues
                         .get_mut(&res.key)
                         .expect("Issues we get labels for should have already been seen")
@@ -233,7 +240,7 @@ enum State {
     },
     FetchRepos {
         submachine: BatchPaginator<String, GetOwnerRepos>,
-        repos: Vec<Ided<Repository>>,
+        issue_queries: Vec<(Id, GetIssues)>,
         start: Instant,
     },
     FetchIssues {
@@ -246,7 +253,6 @@ enum State {
         submachine: BatchPaginator<Id, GetLabels>,
         start: Instant,
         issues: HashMap<Id, Issue>,
-        label_qty: usize,
     },
     Done,
 }
@@ -272,6 +278,7 @@ pub(crate) struct MachineReport {
     open_issues: usize,
     repos_with_open_issues: usize,
     issues_with_extra_labels: usize,
+    extra_labels: usize,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
