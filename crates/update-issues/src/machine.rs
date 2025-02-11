@@ -87,7 +87,7 @@ impl QueryMachine for UpdateIssues<'_> {
                     self.report.repositories = repos.len();
                     self.results
                         .push(Output::Transition(Transition::EndFetchRepos {
-                            repo_qty: self.report.repositories,
+                            repositories: self.report.repositories,
                             elapsed: start.elapsed(),
                         }));
                     let rdiff = self.db.update_repositories(std::mem::take(repos));
@@ -102,7 +102,9 @@ impl QueryMachine for UpdateIssues<'_> {
                     let query = submachine.get_next_query();
                     if query.is_some() {
                         self.results
-                            .push(Output::Transition(Transition::StartFetchIssues));
+                            .push(Output::Transition(Transition::StartFetchIssues {
+                                repos_with_open_issues: self.report.repos_with_open_issues,
+                            }));
                         self.state = State::FetchIssues {
                             submachine,
                             start: Instant::now(),
@@ -125,8 +127,7 @@ impl QueryMachine for UpdateIssues<'_> {
                 } else {
                     self.results
                         .push(Output::Transition(Transition::EndFetchIssues {
-                            issue_qty: self.report.open_issues,
-                            repo_qty: self.report.repos_with_open_issues,
+                            issues: self.report.issues,
                             elapsed: start.elapsed(),
                         }));
                     let mut submachine = BatchPaginator::new(
@@ -156,7 +157,7 @@ impl QueryMachine for UpdateIssues<'_> {
                 } else {
                     self.results
                         .push(Output::Transition(Transition::EndFetchLabels {
-                            label_qty: self.report.extra_labels,
+                            extra_labels: self.report.extra_labels,
                             elapsed: start.elapsed(),
                         }));
                     self.done();
@@ -196,7 +197,7 @@ impl QueryMachine for UpdateIssues<'_> {
                     };
                     repo.set_issue_cursor(end_cursor);
                     for iwl in items {
-                        self.report.open_issues += 1;
+                        self.report.issues += 1;
                         if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size) {
                             self.report.issues_with_extra_labels += 1;
                             label_queries.push(q);
@@ -268,8 +269,8 @@ pub(crate) enum Output {
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
 pub(crate) struct FetchReport {
     repositories: usize,
-    open_issues: usize,
     repos_with_open_issues: usize,
+    issues: usize,
     issues_with_extra_labels: usize,
     extra_labels: usize,
 }
@@ -278,20 +279,21 @@ pub(crate) struct FetchReport {
 pub(crate) enum Transition {
     StartFetchRepos,
     EndFetchRepos {
-        repo_qty: usize,
+        repositories: usize,
         elapsed: Duration,
     },
-    StartFetchIssues,
+    StartFetchIssues {
+        repos_with_open_issues: usize,
+    },
     EndFetchIssues {
-        issue_qty: usize,
-        repo_qty: usize,
+        issues: usize,
         elapsed: Duration,
     },
     StartFetchLabels {
         issues_with_extra_labels: usize,
     },
     EndFetchLabels {
-        label_qty: usize,
+        extra_labels: usize,
         elapsed: Duration,
     },
 }
@@ -300,19 +302,20 @@ impl fmt::Display for Transition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Transition::StartFetchRepos => write!(f, "Fetching repositories …"),
-            Transition::EndFetchRepos { repo_qty, elapsed } => {
-                write!(f, "Fetched {repo_qty} repositories in {elapsed:?}")
-            }
-            Transition::StartFetchIssues => write!(f, "Fetching issues …"),
-            Transition::EndFetchIssues {
-                issue_qty,
-                repo_qty,
+            Transition::EndFetchRepos {
+                repositories,
                 elapsed,
             } => {
-                write!(
-                    f,
-                    "Fetched {issue_qty} issues from {repo_qty} repositories in {elapsed:?}"
-                )
+                write!(f, "Fetched {repositories} repositories in {elapsed:?}")
+            }
+            Transition::StartFetchIssues {
+                repos_with_open_issues,
+            } => write!(
+                f,
+                "Fetching new issues for {repos_with_open_issues} repositories …"
+            ),
+            Transition::EndFetchIssues { issues, elapsed } => {
+                write!(f, "Fetched {issues} issues in {elapsed:?}")
             }
             Transition::StartFetchLabels {
                 issues_with_extra_labels,
@@ -320,8 +323,11 @@ impl fmt::Display for Transition {
                 f,
                 "Fetching more labels for {issues_with_extra_labels} issues …"
             ),
-            Transition::EndFetchLabels { label_qty, elapsed } => {
-                write!(f, "Fetched {label_qty} more labels in {elapsed:?}")
+            Transition::EndFetchLabels {
+                extra_labels,
+                elapsed,
+            } => {
+                write!(f, "Fetched {extra_labels} more labels in {elapsed:?}")
             }
         }
     }
