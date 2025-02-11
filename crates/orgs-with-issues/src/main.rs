@@ -1,13 +1,12 @@
+mod machine;
 mod queries;
 mod types;
-use crate::queries::{GetIssues, GetOwnerRepos};
-use crate::types::Issue;
+use crate::machine::{FetchReport, OrgsWithIssues, Output, Parameters};
 use anyhow::Context;
 use clap::Parser;
-use gqlient::{Client, Id, Ided, DEFAULT_BATCH_SIZE};
+use gqlient::{Client, DEFAULT_BATCH_SIZE};
 use serde::Serialize;
 use serde_jsonlines::{append_json_lines, WriteExt};
-use std::collections::HashMap;
 use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
@@ -17,8 +16,8 @@ use std::time::{Duration, Instant, SystemTime};
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
 struct Arguments {
     /// Number of sub-queries to make per GraphQL request
-    #[arg(short = 'B', long)]
-    batch_size: Option<NonZeroUsize>,
+    #[arg(short = 'B', long, default_value_t = DEFAULT_BATCH_SIZE)]
+    batch_size: NonZeroUsize,
 
     /// Number of labels to request per page
     #[arg(short = 'L', long, default_value = "10")]
@@ -43,91 +42,28 @@ struct Arguments {
 
 fn main() -> anyhow::Result<()> {
     let args = Arguments::parse();
-    let mut client = Client::new_with_local_token()?;
-    if let Some(bsz) = args.batch_size {
-        client.batch_size(bsz);
-    }
+    let client = Client::new_with_local_token()?;
     let start_rate_limit = client.get_rate_limit()?;
 
-    let big_start = Instant::now();
+    let start = Instant::now();
     let timestamp = SystemTime::now();
-    let mut repo_qty = 0;
-    let mut repos_with_issues_qty: usize = 0;
-    let mut issues = HashMap::<Id, Issue>::new();
-
-    eprintln!("[·] Fetching repositories …");
-    let owner_queries = args.owners.clone().into_iter().map(|owner| {
-        (
-            owner.clone(),
-            GetOwnerRepos::new(owner, args.page_size, args.label_page_size),
-        )
-    });
-    let repos_start = Instant::now();
-    let repos = client.batch_paginate(owner_queries)?;
-    let elapsed = repos_start.elapsed();
-
-    let mut issue_queries = Vec::new();
-    let mut label_queries = Vec::new();
-    for Ided { id, data: repo } in repos.into_iter().flat_map(|pr| pr.items) {
-        repo_qty += 1;
-        if !repo.issues.is_empty() {
-            repos_with_issues_qty += 1;
-            for iwl in repo.issues {
-                label_queries.extend(iwl.more_labels_query(args.label_page_size));
-                issues.insert(iwl.issue_id, iwl.issue);
-            }
-        }
-        if repo.has_more_issues {
-            issue_queries.push((
-                id.clone(),
-                GetIssues::new(id, repo.issue_cursor, args.page_size, args.label_page_size),
-            ));
+    let parameters = Parameters {
+        batch_size: args.batch_size,
+        page_size: args.page_size,
+        label_page_size: args.label_page_size,
+    };
+    let machine = OrgsWithIssues::new(args.owners.clone(), parameters);
+    let mut issues = Vec::new();
+    let mut fetched = None;
+    for output in client.run(machine) {
+        match output {
+            Ok(Output::Transition(t)) => eprintln!("[·] {t}"),
+            Ok(Output::Issues(ish)) => issues.extend(ish),
+            Ok(Output::Report(r)) => fetched = Some(r),
+            Err(e) => return Err(e.into()),
         }
     }
-    eprintln!(
-        "[·] Fetched {} repositories ({} with open issues; {} open issues in total) in {:?}",
-        repo_qty,
-        repos_with_issues_qty,
-        issues.len(),
-        elapsed
-    );
-
-    if !issue_queries.is_empty() {
-        eprintln!(
-            "[·] Fetching more issues for {} repositories …",
-            issue_queries.len()
-        );
-        let start = Instant::now();
-        let more_issues = client.batch_paginate(issue_queries)?;
-        let elapsed = start.elapsed();
-        let mut issue_qty = 0;
-        for iwl in more_issues.into_iter().flat_map(|pr| pr.items) {
-            label_queries.extend(iwl.more_labels_query(args.label_page_size));
-            issue_qty += 1;
-            issues.insert(iwl.issue_id, iwl.issue);
-        }
-        eprintln!("[·] Fetched {issue_qty} more issues in {elapsed:?}");
-    }
-
-    let issues_with_extra_labels = label_queries.len();
-    if !label_queries.is_empty() {
-        eprintln!("[·] Fetching more labels for {issues_with_extra_labels} issues …",);
-        let start = Instant::now();
-        let more_labels = client.batch_paginate(label_queries)?;
-        let elapsed = start.elapsed();
-        let mut label_qty = 0;
-        for res in more_labels {
-            label_qty += res.items.len();
-            issues
-                .get_mut(&res.key)
-                .expect("Issues we get labels for should have already been seen")
-                .labels
-                .extend(res.items);
-        }
-        eprintln!("[·] Fetched {label_qty} more labels in {elapsed:?}");
-    }
-
-    let elapsed = big_start.elapsed();
+    let elapsed = start.elapsed();
     eprintln!(
         "[·] Total of {} issues fetched in {:?}",
         issues.len(),
@@ -149,18 +85,8 @@ fn main() -> anyhow::Result<()> {
             commit: option_env!("GIT_COMMIT"),
             timestamp: humantime::format_rfc3339(timestamp).to_string(),
             owners: args.owners,
-            parameters: Parameters {
-                batch_size: match args.batch_size {
-                    Some(bs) => bs.get(),
-                    None => DEFAULT_BATCH_SIZE,
-                },
-                page_size: args.page_size,
-                label_page_size: args.label_page_size,
-            },
-            repositories: repo_qty,
-            open_issues: issues.len(),
-            repos_with_open_issues: repos_with_issues_qty,
-            issues_with_extra_labels,
+            parameters,
+            fetched: fetched.expect("fetched should have been yielded"),
             elapsed,
             rate_limit_points,
         };
@@ -171,7 +97,7 @@ fn main() -> anyhow::Result<()> {
     if let Some(outfile) = args.outfile {
         eprintln!("[·] Dumping to {outfile:#} …");
         let mut fp = outfile.create().context("failed to open file")?;
-        fp.write_json_lines(issues.values())
+        fp.write_json_lines(issues)
             .context("failed to dump issues")?;
         fp.flush().context("failed to flush filehandle")?;
     }
@@ -186,18 +112,7 @@ struct Report {
     timestamp: String,
     owners: Vec<String>,
     parameters: Parameters,
-    repositories: usize,
-    open_issues: usize,
-    repos_with_open_issues: usize,
-    issues_with_extra_labels: usize,
+    fetched: FetchReport,
     elapsed: Duration,
     rate_limit_points: Option<u32>,
-}
-
-#[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize)]
-#[allow(clippy::struct_field_names)]
-struct Parameters {
-    batch_size: usize,
-    page_size: NonZeroUsize,
-    label_page_size: NonZeroUsize,
 }

@@ -137,6 +137,9 @@ elapsed time, and (if possible) the number of API rate limit points used.
   `-o`/`--outfile` is specified, then the updated database will be written back
   out to this file at end of program execution.
 
+- `-L <int>`/`--label-page-size <int>` — Set the number of labels to request
+  per page [default: 10]
+
 - `--no-save` — If the `-i`/`--infile` option was also supplied, do not write
   the updated database back to the infile at end of program execution.
 

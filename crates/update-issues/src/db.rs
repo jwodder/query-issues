@@ -68,7 +68,7 @@ impl Database {
         &self,
         page_size: NonZeroUsize,
         label_page_size: NonZeroUsize,
-    ) -> impl Iterator<Item = (Id, GetIssues)> + '_ {
+    ) -> Vec<(Id, GetIssues)> {
         self.0
             .iter()
             .filter(|(_, repo)| repo.repository.open_issues != 0)
@@ -83,6 +83,7 @@ impl Database {
                     ),
                 )
             })
+            .collect()
     }
 }
 
