@@ -117,7 +117,9 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(ref report_file) = args.report_file {
         eprintln!("[·] Appending report to {} …", report_file.display());
-        let rdiff = rdiff.expect("rdiff should have been yielded");
+        // rdiff is None if no owners were specified, but idiff should always
+        // be Some.
+        let rdiff = rdiff.unwrap_or_default();
         let idiff = idiff.expect("idiff should have been yielded");
         let report = Report {
             program: env!("CARGO_BIN_NAME"),
