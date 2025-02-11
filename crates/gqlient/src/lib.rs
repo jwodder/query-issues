@@ -4,6 +4,7 @@ pub use crate::queries::*;
 pub use crate::types::*;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
+use std::collections::VecDeque;
 use std::fmt;
 use std::num::NonZeroUsize;
 use thiserror::Error;
@@ -76,7 +77,8 @@ pub struct QueryResults<'a, Q: QueryMachine> {
     client: &'a Client,
     query: Q,
     query_done: bool,
-    yielding: std::vec::IntoIter<Q::Output>,
+    yielding: VecDeque<Q::Output>,
+    payload: Option<QueryPayload>,
 }
 
 impl<'a, Q: QueryMachine> QueryResults<'a, Q> {
@@ -85,7 +87,8 @@ impl<'a, Q: QueryMachine> QueryResults<'a, Q> {
             client,
             query,
             query_done: false,
-            yielding: Vec::new().into_iter(),
+            yielding: VecDeque::new(),
+            payload: None,
         }
     }
 }
@@ -95,24 +98,27 @@ impl<Q: QueryMachine> Iterator for QueryResults<'_, Q> {
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            if let Some(value) = self.yielding.next() {
+            if let Some(value) = self.yielding.pop_front() {
                 return Some(Ok(value));
             } else if self.query_done {
                 return None;
+            } else if let Some(payload) = self.payload.take() {
+                match self.client.query(payload) {
+                    Ok(data) => {
+                        if let Err(e) = self.query.handle_response(data) {
+                            return Some(Err(e.into()));
+                        }
+                    }
+                    Err(e) => return Some(Err(e)),
+                }
+                self.yielding.extend(self.query.get_output());
             } else {
                 if let Some(payload) = self.query.get_next_query() {
-                    match self.client.query(payload) {
-                        Ok(data) => {
-                            if let Err(e) = self.query.handle_response(data) {
-                                return Some(Err(e.into()));
-                            }
-                        }
-                        Err(e) => return Some(Err(e)),
-                    }
+                    self.payload = Some(payload);
                 } else {
                     self.query_done = true;
                 }
-                self.yielding = self.query.get_output().into_iter();
+                self.yielding.extend(self.query.get_output());
             }
         }
     }
