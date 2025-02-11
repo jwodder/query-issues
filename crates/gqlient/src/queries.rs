@@ -1,5 +1,5 @@
 use crate::types::{Cursor, JsonMap, Page, Variable};
-use crate::QueryPayload;
+use crate::{QueryPayload, DEFAULT_BATCH_SIZE};
 use indenter::indented;
 use std::collections::{
     VecDeque,
@@ -53,6 +53,17 @@ impl<K, P: Paginator> BatchPaginator<K, P> {
             results,
             active,
             batch_size,
+        }
+    }
+}
+
+impl<K, P: Paginator> Default for BatchPaginator<K, P> {
+    fn default() -> Self {
+        BatchPaginator {
+            in_progress: VecDeque::new(),
+            results: Vec::new(),
+            active: HashMap::new(),
+            batch_size: DEFAULT_BATCH_SIZE,
         }
     }
 }

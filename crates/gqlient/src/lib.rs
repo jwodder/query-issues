@@ -12,12 +12,13 @@ use ureq::{Agent, AgentBuilder};
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
 static RATE_LIMIT_URL: &str = "https://api.github.com/rate_limit";
 
-pub const DEFAULT_BATCH_SIZE: usize = 50;
+#[allow(unsafe_code)]
+// SAFETY: 50 != 0
+pub const DEFAULT_BATCH_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(50) };
 
 #[derive(Clone, Debug)]
 pub struct Client {
     inner: Agent,
-    batch_size: NonZeroUsize,
 }
 
 impl Client {
@@ -33,18 +34,12 @@ impl Client {
                 )
             })
             .build();
-        let batch_size =
-            NonZeroUsize::new(DEFAULT_BATCH_SIZE).expect("default batch size should be nonzero");
-        Client { inner, batch_size }
+        Client { inner }
     }
 
     pub fn new_with_local_token() -> anyhow::Result<Client> {
         let token = gh_token::get().context("unable to fetch GitHub access token")?;
         Ok(Client::new(&token))
-    }
-
-    pub fn batch_size(&mut self, batch_size: NonZeroUsize) {
-        self.batch_size = batch_size;
     }
 
     pub fn get_rate_limit(&self) -> anyhow::Result<RateLimit> {
