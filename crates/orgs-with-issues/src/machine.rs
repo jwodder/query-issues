@@ -95,10 +95,32 @@ impl QueryMachine for OrgsWithIssues {
                             issues: std::mem::take(issues),
                             label_queries: std::mem::take(label_queries),
                         };
+                        query
                     } else {
-                        self.done();
+                        let mut submachine = BatchPaginator::new(
+                            std::mem::take(label_queries),
+                            self.parameters.batch_size,
+                        );
+                        let query = submachine.get_next_query();
+                        if query.is_some() {
+                            self.results
+                                .push(Output::Transition(Transition::StartFetchLabels {
+                                    issues_with_extra_labels: self.report.issues_with_extra_labels,
+                                }));
+                            self.state = State::FetchLabels {
+                                submachine,
+                                start: Instant::now(),
+                                issues: std::mem::take(issues),
+                            };
+                        } else {
+                            debug_assert!(
+                                issues.is_empty(),
+                                "no label queries to run, but `issues` is nonempty"
+                            );
+                            self.done();
+                        }
+                        query
                     }
-                    query
                 }
             }
             State::FetchIssues {
