@@ -195,7 +195,9 @@ impl QueryMachine for UpdateIssues<'_> {
                         // TODO: Warn? Error?
                         continue;
                     };
-                    repo.set_issue_cursor(end_cursor);
+                    if end_cursor.is_some() {
+                        repo.set_issue_cursor(end_cursor);
+                    }
                     for iwl in items {
                         self.report.issues += 1;
                         if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size) {
