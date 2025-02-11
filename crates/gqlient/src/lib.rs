@@ -19,6 +19,15 @@ use ureq::{
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
 static RATE_LIMIT_URL: &str = "https://api.github.com/rate_limit";
 
+static USER_AGENT: &str = concat!(
+    env!("CARGO_PKG_NAME"),
+    "/",
+    env!("CARGO_PKG_VERSION"),
+    " (",
+    env!("CARGO_PKG_REPOSITORY"),
+    ")",
+);
+
 #[allow(unsafe_code)]
 // SAFETY: 50 != 0
 pub const DEFAULT_BATCH_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(50) };
@@ -33,6 +42,7 @@ impl Client {
         let auth = HeaderValue::from_str(&format!("Bearer {token}"))?;
         let inner = Agent::config_builder()
             .https_only(true)
+            .user_agent(USER_AGENT)
             .middleware(
                 move |mut req: Request<SendBody<'_>>, next: MiddlewareNext<'_>| {
                     let _ = req.headers_mut().insert("Authorization", auth.clone());
