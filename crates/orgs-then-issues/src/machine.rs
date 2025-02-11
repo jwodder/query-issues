@@ -140,6 +140,9 @@ impl QueryMachine for OrgsThenIssues {
                         };
                         query
                     } else {
+                        self.results.push(Output::Issues(
+                            std::mem::take(issues).into_values().collect(),
+                        ));
                         self.results.push(Output::Report(self.report));
                         self.state = State::Done;
                         None

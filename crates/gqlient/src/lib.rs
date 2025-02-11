@@ -75,6 +75,7 @@ impl Client {
 pub struct QueryResults<'a, Q: QueryMachine> {
     client: &'a Client,
     query: Q,
+    query_done: bool,
     yielding: std::vec::IntoIter<Q::Output>,
 }
 
@@ -83,6 +84,7 @@ impl<'a, Q: QueryMachine> QueryResults<'a, Q> {
         QueryResults {
             client,
             query,
+            query_done: false,
             yielding: Vec::new().into_iter(),
         }
     }
@@ -95,17 +97,22 @@ impl<Q: QueryMachine> Iterator for QueryResults<'_, Q> {
         loop {
             if let Some(value) = self.yielding.next() {
                 return Some(Ok(value));
+            } else if self.query_done {
+                return None;
             } else {
-                let payload = self.query.get_next_query()?;
-                match self.client.query(payload) {
-                    Ok(data) => match self.query.handle_response(data) {
-                        Ok(()) => {
-                            self.yielding = self.query.get_output().into_iter();
+                if let Some(payload) = self.query.get_next_query() {
+                    match self.client.query(payload) {
+                        Ok(data) => {
+                            if let Err(e) = self.query.handle_response(data) {
+                                return Some(Err(e.into()));
+                            }
                         }
-                        Err(e) => return Some(Err(e.into())),
-                    },
-                    Err(e) => return Some(Err(e)),
+                        Err(e) => return Some(Err(e)),
+                    }
+                } else {
+                    self.query_done = true;
                 }
+                self.yielding = self.query.get_output().into_iter();
             }
         }
     }
