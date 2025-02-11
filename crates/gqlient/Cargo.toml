@@ -10,7 +10,6 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-anyhow = "1.0.82"
 gh-token = "0.1.7"
 indenter = "0.3.3"
 serde = { version = "1.0.200", features = ["derive"] }
