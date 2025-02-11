@@ -16,26 +16,26 @@ pub(crate) struct OrgsThenIssues {
 
 impl OrgsThenIssues {
     pub(crate) fn new(owners: Vec<String>, parameters: Parameters) -> OrgsThenIssues {
-        let state = if owners.is_empty() {
-            State::Done
-        } else {
-            let submachine = BatchPaginator::new(
-                owners.into_iter().map(|owner| {
-                    (
-                        owner.clone(),
-                        GetOwnerRepos::new(owner, parameters.page_size),
-                    )
-                }),
-                parameters.batch_size,
-            );
-            State::Start { submachine }
-        };
+        let submachine = BatchPaginator::new(
+            owners.into_iter().map(|owner| {
+                (
+                    owner.clone(),
+                    GetOwnerRepos::new(owner, parameters.page_size),
+                )
+            }),
+            parameters.batch_size,
+        );
         OrgsThenIssues {
             parameters,
-            state,
+            state: State::Start { submachine },
             results: Vec::new(),
             report: MachineReport::default(),
         }
+    }
+
+    fn done(&mut self) {
+        self.results.push(Output::Report(self.report));
+        self.state = State::Done;
     }
 }
 
@@ -46,14 +46,17 @@ impl QueryMachine for OrgsThenIssues {
         match &mut self.state {
             State::Start { submachine } => {
                 let query = submachine.get_next_query();
-                let start = Instant::now();
-                self.state = State::FetchRepos {
-                    submachine: std::mem::take(submachine),
-                    issue_queries: Vec::new(),
-                    start,
-                };
-                self.results
-                    .push(Output::Transition(Transition::StartFetchRepos));
+                if query.is_some() {
+                    self.state = State::FetchRepos {
+                        submachine: std::mem::take(submachine),
+                        issue_queries: Vec::new(),
+                        start: Instant::now(),
+                    };
+                    self.results
+                        .push(Output::Transition(Transition::StartFetchRepos));
+                } else {
+                    self.done();
+                }
                 query
             }
             State::FetchRepos {
@@ -65,12 +68,11 @@ impl QueryMachine for OrgsThenIssues {
                 if query.is_some() {
                     query
                 } else {
-                    let elapsed = start.elapsed();
                     self.results
                         .push(Output::Transition(Transition::EndFetchRepos {
                             repo_qty: self.report.repositories,
                             repos_with_issues_qty: self.report.repos_with_open_issues,
-                            elapsed,
+                            elapsed: start.elapsed(),
                         }));
                     let mut submachine = BatchPaginator::new(
                         std::mem::take(issue_queries),
@@ -89,8 +91,7 @@ impl QueryMachine for OrgsThenIssues {
                             label_queries: Vec::new(),
                         };
                     } else {
-                        self.results.push(Output::Report(self.report));
-                        self.state = State::Done;
+                        self.done();
                     }
                     query
                 }
@@ -105,38 +106,34 @@ impl QueryMachine for OrgsThenIssues {
                 if query.is_some() {
                     query
                 } else {
-                    let elapsed = start.elapsed();
                     self.results
                         .push(Output::Transition(Transition::EndFetchIssues {
                             issue_qty: self.report.open_issues,
-                            elapsed,
+                            elapsed: start.elapsed(),
                         }));
-                    if !label_queries.is_empty() {
-                        self.report.issues_with_extra_labels = label_queries.len();
+                    let mut submachine = BatchPaginator::new(
+                        std::mem::take(label_queries),
+                        self.parameters.batch_size,
+                    );
+                    let query = submachine.get_next_query();
+                    if query.is_some() {
                         self.results
                             .push(Output::Transition(Transition::StartFetchLabels {
                                 issues_with_extra_labels: self.report.issues_with_extra_labels,
                             }));
-                        let start = Instant::now();
-                        let mut submachine = BatchPaginator::new(
-                            std::mem::take(label_queries),
-                            self.parameters.batch_size,
-                        );
-                        let query = submachine.get_next_query();
                         self.state = State::FetchLabels {
                             submachine,
-                            start,
+                            start: Instant::now(),
                             issues: std::mem::take(issues),
                         };
-                        query
                     } else {
-                        self.results.push(Output::Issues(
-                            std::mem::take(issues).into_values().collect(),
-                        ));
-                        self.results.push(Output::Report(self.report));
-                        self.state = State::Done;
-                        None
+                        debug_assert!(
+                            issues.is_empty(),
+                            "no label queries to run, but `issues` is nonempty"
+                        );
+                        self.done();
                     }
+                    query
                 }
             }
             State::FetchLabels {
@@ -148,17 +145,15 @@ impl QueryMachine for OrgsThenIssues {
                 if query.is_some() {
                     query
                 } else {
-                    let elapsed = start.elapsed();
                     self.results
                         .push(Output::Transition(Transition::EndFetchLabels {
                             label_qty: self.report.extra_labels,
-                            elapsed,
+                            elapsed: start.elapsed(),
                         }));
                     self.results.push(Output::Issues(
                         std::mem::take(issues).into_values().collect(),
                     ));
-                    self.results.push(Output::Report(self.report));
-                    self.state = State::Done;
+                    self.done();
                     None
                 }
             }
@@ -205,6 +200,7 @@ impl QueryMachine for OrgsThenIssues {
                 for iwl in submachine.get_output().into_iter().flat_map(|pr| pr.items) {
                     self.report.open_issues += 1;
                     if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size) {
+                        self.report.issues_with_extra_labels += 1;
                         label_queries.push(q);
                         issues.insert(iwl.issue_id, iwl.issue);
                     } else {
