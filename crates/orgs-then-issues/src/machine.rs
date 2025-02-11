@@ -11,7 +11,7 @@ pub(crate) struct OrgsThenIssues {
     parameters: Parameters,
     state: State,
     results: Vec<Output>,
-    report: MachineReport,
+    report: FetchReport,
 }
 
 impl OrgsThenIssues {
@@ -29,7 +29,7 @@ impl OrgsThenIssues {
             parameters,
             state: State::Start { submachine },
             results: Vec::new(),
-            report: MachineReport::default(),
+            report: FetchReport::default(),
         }
     }
 
@@ -269,11 +269,11 @@ pub(crate) struct Parameters {
 pub(crate) enum Output {
     Transition(Transition),
     Issues(Vec<Issue>),
-    Report(MachineReport),
+    Report(FetchReport),
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
-pub(crate) struct MachineReport {
+pub(crate) struct FetchReport {
     repositories: usize,
     open_issues: usize,
     repos_with_open_issues: usize,

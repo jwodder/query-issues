@@ -1,7 +1,7 @@
 mod machine;
 mod queries;
 mod types;
-use crate::machine::{MachineReport, OrgsThenIssues, Output, Parameters};
+use crate::machine::{FetchReport, OrgsThenIssues, Output, Parameters};
 use anyhow::Context;
 use clap::Parser;
 use gqlient::{Client, DEFAULT_BATCH_SIZE};
@@ -54,12 +54,12 @@ fn main() -> anyhow::Result<()> {
     };
     let machine = OrgsThenIssues::new(args.owners.clone(), parameters);
     let mut issues = Vec::new();
-    let mut machine_report = None;
+    let mut fetched = None;
     for output in client.run(machine) {
         match output {
             Ok(Output::Transition(t)) => eprintln!("[·] {t}"),
             Ok(Output::Issues(ish)) => issues.extend(ish),
-            Ok(Output::Report(r)) => machine_report = Some(r),
+            Ok(Output::Report(r)) => fetched = Some(r),
             Err(e) => return Err(e.into()),
         }
     }
@@ -82,7 +82,7 @@ fn main() -> anyhow::Result<()> {
             timestamp: humantime::format_rfc3339(timestamp).to_string(),
             owners: args.owners,
             parameters,
-            machine_report: machine_report.expect("machine report should have been yielded"),
+            fetched: fetched.expect("fetched should have been yielded"),
             elapsed,
             rate_limit_points,
         };
@@ -101,7 +101,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(clippy::struct_field_names)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct Report {
     program: &'static str,
@@ -109,8 +108,7 @@ struct Report {
     timestamp: String,
     owners: Vec<String>,
     parameters: Parameters,
-    #[serde(flatten)]
-    machine_report: MachineReport,
+    fetched: FetchReport,
     elapsed: Duration,
     rate_limit_points: Option<u32>,
 }

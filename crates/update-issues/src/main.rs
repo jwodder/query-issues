@@ -3,7 +3,7 @@ mod machine;
 mod queries;
 mod types;
 use crate::db::Database;
-use crate::machine::{MachineReport, Output, Parameters, UpdateIssues};
+use crate::machine::{FetchReport, Output, Parameters, UpdateIssues};
 use anyhow::Context;
 use clap::Parser;
 use gqlient::{Client, DEFAULT_BATCH_SIZE};
@@ -86,13 +86,13 @@ fn main() -> anyhow::Result<()> {
         label_page_size: args.label_page_size,
     };
     let machine = UpdateIssues::new(&mut db, args.owners.clone(), parameters);
-    let mut machine_report = None;
+    let mut fetched = None;
     let mut rdiff = None;
     let mut idiff = None;
     for output in client.run(machine) {
         match output {
             Ok(Output::Transition(t)) => eprintln!("[·] {t}"),
-            Ok(Output::Report(r)) => machine_report = Some(r),
+            Ok(Output::Report(r)) => fetched = Some(r),
             Ok(Output::RepoDiff(rd)) => {
                 eprintln!("[·] {rd}");
                 rdiff = Some(rd);
@@ -125,7 +125,7 @@ fn main() -> anyhow::Result<()> {
             timestamp: humantime::format_rfc3339(timestamp).to_string(),
             owners: args.owners.clone(),
             parameters,
-            machine_report: machine_report.expect("machine report should have been yielded"),
+            fetched: fetched.expect("fetched should have been yielded"),
             repos_updated: rdiff.repos_touched(),
             issues_updated: rdiff.closed_issues.saturating_add(idiff.issues_touched()),
             elapsed,
@@ -143,7 +143,6 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-#[allow(clippy::struct_field_names)]
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 struct Report {
     program: &'static str,
@@ -151,8 +150,7 @@ struct Report {
     timestamp: String,
     owners: Vec<String>,
     parameters: Parameters,
-    #[serde(flatten)]
-    machine_report: MachineReport,
+    fetched: FetchReport,
     repos_updated: usize,
     issues_updated: usize,
     elapsed: Duration,

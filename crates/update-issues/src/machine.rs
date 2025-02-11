@@ -13,7 +13,7 @@ pub(crate) struct UpdateIssues<'a> {
     parameters: Parameters,
     state: State,
     results: Vec<Output>,
-    report: MachineReport,
+    report: FetchReport,
     // The first Id is the issue ID; the second Id is the ID of the repo the
     // issue belongs to.
     issues: HashMap<Id, (Id, Issue)>,
@@ -35,7 +35,7 @@ impl<'a> UpdateIssues<'a> {
             parameters,
             state: State::Start { submachine },
             results: Vec::new(),
-            report: MachineReport::default(),
+            report: FetchReport::default(),
             issues: HashMap::new(),
         }
     }
@@ -260,13 +260,13 @@ pub(crate) struct Parameters {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) enum Output {
     Transition(Transition),
-    Report(MachineReport),
+    Report(FetchReport),
     RepoDiff(RepoDiff),
     IssueDiff(IssueDiff),
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
-pub(crate) struct MachineReport {
+pub(crate) struct FetchReport {
     repositories: usize,
     open_issues: usize,
     repos_with_open_issues: usize,
