@@ -2,7 +2,6 @@ mod queries;
 mod types;
 pub use crate::queries::*;
 pub use crate::types::*;
-use anyhow::Context;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use std::fmt;
@@ -23,7 +22,6 @@ pub struct Client {
 }
 
 impl Client {
-    #[allow(clippy::missing_panics_doc)]
     pub fn new(token: &str) -> Client {
         let auth = format!("Bearer {token}");
         let inner = AgentBuilder::new()
@@ -38,22 +36,25 @@ impl Client {
         Client { inner }
     }
 
-    pub fn new_with_local_token() -> anyhow::Result<Client> {
-        let token = gh_token::get().context("unable to fetch GitHub access token")?;
+    pub fn new_with_local_token() -> Result<Client, TokenError> {
+        let token = gh_token::get()?;
         Ok(Client::new(&token))
     }
 
-    pub fn get_rate_limit(&self) -> anyhow::Result<RateLimit> {
-        self.inner
+    pub fn get_rate_limit(&self) -> Result<RateLimit, RateLimitError> {
+        let mut r = self
+            .inner
             .get(RATE_LIMIT_URL)
             .call()
-            .context("failed to perform rate limit request")?
-            .into_json::<RateLimitResponse>()
-            .context("failed to deserialize rate limit response")
-            .map(|r| r.resources.graphql)
+            .map_err(Box::new)?
+            .into_reader();
+        let mut bytes = Vec::new();
+        r.read_to_end(&mut bytes)?;
+        let r = serde_json::from_slice::<RateLimitResponse>(&bytes)?;
+        Ok(r.resources.graphql)
     }
 
-    pub fn query(&self, payload: QueryPayload) -> Result<JsonMap, Error> {
+    pub fn query(&self, payload: QueryPayload) -> Result<JsonMap, QueryError> {
         let mut r = self
             .inner
             .post(GRAPHQL_API_URL)
@@ -94,7 +95,7 @@ impl<'a, Q: QueryMachine> QueryResults<'a, Q> {
 }
 
 impl<Q: QueryMachine> Iterator for QueryResults<'_, Q> {
-    type Item = Result<Q::Output, Error>;
+    type Item = Result<Q::Output, QueryError>;
 
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -125,7 +126,21 @@ impl<Q: QueryMachine> Iterator for QueryResults<'_, Q> {
 }
 
 #[derive(Debug, Error)]
-pub enum Error {
+#[error("failed to fetch GitHub access token")]
+pub struct TokenError(#[from] gh_token::Error);
+
+#[derive(Debug, Error)]
+pub enum RateLimitError {
+    #[error("failed to perform rate limit request")]
+    Http(#[from] Box<ureq::Error>),
+    #[error("failed to read rate limit response")]
+    Read(#[from] std::io::Error),
+    #[error("failed to deserialize rate limit response")]
+    Json(#[from] serde_json::Error),
+}
+
+#[derive(Debug, Error)]
+pub enum QueryError {
     #[error("failed to perform GraphQL request")]
     Http(#[from] Box<ureq::Error>),
     #[error("failed to read GraphQL response")]
