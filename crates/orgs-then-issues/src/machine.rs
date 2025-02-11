@@ -16,19 +16,23 @@ pub(crate) struct OrgsThenIssues {
 
 impl OrgsThenIssues {
     pub(crate) fn new(owners: Vec<String>, parameters: Parameters) -> OrgsThenIssues {
-        // TODO: If owners is empty, go straight to Done
-        let submachine = BatchPaginator::new(
-            owners.into_iter().map(|owner| {
-                (
-                    owner.clone(),
-                    GetOwnerRepos::new(owner, parameters.page_size),
-                )
-            }),
-            parameters.batch_size,
-        );
+        let state = if owners.is_empty() {
+            State::Done
+        } else {
+            let submachine = BatchPaginator::new(
+                owners.into_iter().map(|owner| {
+                    (
+                        owner.clone(),
+                        GetOwnerRepos::new(owner, parameters.page_size),
+                    )
+                }),
+                parameters.batch_size,
+            );
+            State::Start { submachine }
+        };
         OrgsThenIssues {
             parameters,
-            state: State::Start { submachine },
+            state,
             results: Vec::new(),
             report: MachineReport::default(),
         }
