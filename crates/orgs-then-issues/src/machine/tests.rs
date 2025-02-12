@@ -124,6 +124,8 @@ fn no_repos() {
     ]);
     assert!(machine.handle_response(response).is_ok());
 
+    assert!(machine.get_output().is_empty());
+
     assert_eq!(machine.get_next_query(), None);
 
     let outputs = machine.get_output();
@@ -266,6 +268,8 @@ fn no_issues() {
         ),
     ]);
     assert!(machine.handle_response(response).is_ok());
+
+    assert!(machine.get_output().is_empty());
 
     assert_eq!(machine.get_next_query(), None);
 
@@ -415,6 +419,8 @@ fn issues() {
         ),
     ]);
     assert!(machine.handle_response(response).is_ok());
+
+    assert!(machine.get_output().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -637,10 +643,8 @@ fn issues() {
     ]);
     assert!(machine.handle_response(response).is_ok());
 
-    assert_eq!(machine.get_next_query(), None);
-
     let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 3);
+    assert_eq!(outputs.len(), 1);
     assert_eq!(
         outputs[0],
         Output::Issues(vec![
@@ -691,12 +695,17 @@ fn issues() {
             },
         ])
     );
+
+    assert_eq!(machine.get_next_query(), None);
+
+    let outputs = machine.get_output();
+    assert_eq!(outputs.len(), 2);
     assert_matches!(
-        outputs[1],
+        outputs[0],
         Output::Transition(Transition::EndFetchIssues { open_issues: 5, .. })
     );
     assert_eq!(
-        outputs[2],
+        outputs[1],
         Output::Report(FetchReport {
             repositories: 3,
             repos_with_open_issues: 2,
@@ -779,6 +788,8 @@ fn extra_labels() {
         }),
     )]);
     assert!(machine.handle_response(response).is_ok());
+
+    assert!(machine.get_output().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -882,6 +893,8 @@ fn extra_labels() {
     )]);
     assert!(machine.handle_response(response).is_ok());
 
+    assert!(machine.get_output().is_empty());
+
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
         payload.query,
@@ -943,6 +956,8 @@ fn extra_labels() {
         }),
     )]);
     assert!(machine.handle_response(response).is_ok());
+
+    assert!(machine.get_output().is_empty());
 
     assert_eq!(machine.get_next_query(), None);
 
