@@ -19,7 +19,7 @@ pub(crate) struct UpdateIssues<'a> {
     label_queries: Vec<(Id, GetLabels)>,
     // The first Id is the issue ID; the second Id is the ID of the repo the
     // issue belongs to.
-    issues: HashMap<Id, (Id, Issue)>,
+    issues_needing_labels: HashMap<Id, (Id, Issue)>,
 }
 
 impl<'a> UpdateIssues<'a> {
@@ -33,7 +33,7 @@ impl<'a> UpdateIssues<'a> {
             report: FetchReport::default(),
             repos: Vec::new(),
             label_queries: Vec::new(),
-            issues: HashMap::new(),
+            issues_needing_labels: HashMap::new(),
         }
     }
 
@@ -92,15 +92,9 @@ impl<'a> UpdateIssues<'a> {
     }
 
     fn done(&mut self) -> Option<QueryPayload> {
-        let mut idiff = IssueDiff::default();
-        for (issue_id, (repo_id, issue)) in std::mem::take(&mut self.issues) {
-            let Some(repo) = self.db.get_mut(&repo_id) else {
-                // TODO: Warn? Error?
-                continue;
-            };
-            idiff += repo.update_issue(issue_id, issue);
+        for (issue_id, (repo_id, issue)) in std::mem::take(&mut self.issues_needing_labels) {
+            self.report.issue_diff += self.db.update_issue(repo_id, issue_id, issue);
         }
-        self.results.push(Output::IssueDiff(idiff));
         self.results.push(Output::Report(self.report));
         self.state = State::Done;
         None
@@ -199,9 +193,13 @@ impl QueryMachine for UpdateIssues<'_> {
                         if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size) {
                             self.report.issues_with_extra_labels += 1;
                             self.label_queries.push(q);
+                            self.issues_needing_labels
+                                .insert(iwl.issue_id, (repo_id.clone(), iwl.issue));
+                        } else {
+                            self.report.issue_diff +=
+                                self.db
+                                    .update_issue(repo_id.clone(), iwl.issue_id, iwl.issue);
                         }
-                        self.issues
-                            .insert(iwl.issue_id, (repo_id.clone(), iwl.issue));
                     }
                 }
             }
@@ -209,7 +207,7 @@ impl QueryMachine for UpdateIssues<'_> {
                 submachine.handle_response(data)?;
                 for res in submachine.get_output() {
                     self.report.extra_labels += res.items.len();
-                    self.issues
+                    self.issues_needing_labels
                         .get_mut(&res.key)
                         .expect("Issues we get labels for should have already been seen")
                         .1
@@ -257,7 +255,6 @@ pub(crate) enum Output {
     Transition(Transition),
     Report(FetchReport),
     RepoDiff(RepoDiff),
-    IssueDiff(IssueDiff),
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
@@ -265,6 +262,7 @@ pub(crate) struct FetchReport {
     repositories: usize,
     repos_with_open_issues: usize,
     issues: usize,
+    pub(crate) issue_diff: IssueDiff,
     issues_with_extra_labels: usize,
     extra_labels: usize,
 }

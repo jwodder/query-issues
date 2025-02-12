@@ -75,6 +75,14 @@ impl Database {
             .filter_map(|repo| repo.issues_query(page_size, label_page_size))
             .collect()
     }
+
+    pub(crate) fn update_issue(&mut self, repo_id: Id, issue_id: Id, issue: Issue) -> IssueDiff {
+        let Some(repo) = self.get_mut(&repo_id) else {
+            // TODO: Warn? Error?
+            return IssueDiff::default();
+        };
+        repo.update_issue(issue_id, issue)
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -181,7 +189,7 @@ impl fmt::Display for RepoDiff {
     }
 }
 
-#[derive(Copy, Clone, Debug, Default, Eq, PartialEq)]
+#[derive(Copy, Clone, Debug, Default, Eq, PartialEq, Serialize)]
 pub(crate) struct IssueDiff {
     added: usize,
     modified: usize,

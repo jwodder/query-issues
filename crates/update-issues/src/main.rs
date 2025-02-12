@@ -88,18 +88,16 @@ fn main() -> anyhow::Result<()> {
     let machine = UpdateIssues::new(&mut db, args.owners.clone(), parameters);
     let mut fetched = None;
     let mut rdiff = None;
-    let mut idiff = None;
     for output in client.run(machine) {
         match output {
             Ok(Output::Transition(t)) => eprintln!("[·] {t}"),
-            Ok(Output::Report(r)) => fetched = Some(r),
+            Ok(Output::Report(r)) => {
+                eprintln!("[·] {}", r.issue_diff);
+                fetched = Some(r);
+            }
             Ok(Output::RepoDiff(rd)) => {
                 eprintln!("[·] {rd}");
                 rdiff = Some(rd);
-            }
-            Ok(Output::IssueDiff(id)) => {
-                eprintln!("[·] {id}");
-                idiff = Some(id);
             }
             Err(e) => return Err(e.into()),
         }
@@ -117,19 +115,21 @@ fn main() -> anyhow::Result<()> {
 
     if let Some(ref report_file) = args.report_file {
         eprintln!("[·] Appending report to {} …", report_file.display());
-        // rdiff is None if no owners were specified, but idiff should always
+        // rdiff is None if no owners were specified, but fetched should always
         // be Some.
         let rdiff = rdiff.unwrap_or_default();
-        let idiff = idiff.expect("idiff should have been yielded");
+        let fetched = fetched.expect("fetched should have been yielded");
         let report = Report {
             program: env!("CARGO_BIN_NAME"),
             commit: option_env!("GIT_COMMIT"),
             timestamp: humantime::format_rfc3339(timestamp).to_string(),
             owners: args.owners.clone(),
             parameters,
-            fetched: fetched.expect("fetched should have been yielded"),
+            fetched,
             repos_updated: rdiff.repos_touched(),
-            issues_updated: rdiff.closed_issues.saturating_add(idiff.issues_touched()),
+            issues_updated: rdiff
+                .closed_issues
+                .saturating_add(fetched.issue_diff.issues_touched()),
             elapsed,
             rate_limit_points,
         };
