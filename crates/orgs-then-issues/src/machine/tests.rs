@@ -27,6 +27,7 @@ fn no_repos() {
         label_page_size: NonZeroUsize::new(10).unwrap(),
     };
     let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters);
+
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
         payload.query,
@@ -89,10 +90,12 @@ fn no_repos() {
             ("q1_cursor".into(), serde_json::Value::Null),
         ])
     );
+
     assert_eq!(
         machine.get_output(),
         vec![Output::Transition(Transition::StartFetchRepos)]
     );
+
     let response = JsonMap::from_iter([
         (
             "q0".into(),
@@ -120,7 +123,9 @@ fn no_repos() {
         ),
     ]);
     assert!(machine.handle_response(response).is_ok());
+
     assert_eq!(machine.get_next_query(), None);
+
     let outputs = machine.get_output();
     assert_eq!(outputs.len(), 2);
     assert_matches!(
@@ -142,6 +147,7 @@ fn no_issues() {
         label_page_size: NonZeroUsize::new(10).unwrap(),
     };
     let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters);
+
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
         payload.query,
@@ -204,10 +210,12 @@ fn no_issues() {
             ("q1_cursor".into(), serde_json::Value::Null),
         ])
     );
+
     assert_eq!(
         machine.get_output(),
         vec![Output::Transition(Transition::StartFetchRepos)]
     );
+
     let response = JsonMap::from_iter([
         (
             "q0".into(),
@@ -258,7 +266,9 @@ fn no_issues() {
         ),
     ]);
     assert!(machine.handle_response(response).is_ok());
+
     assert_eq!(machine.get_next_query(), None);
+
     let outputs = machine.get_output();
     assert_eq!(outputs.len(), 2);
     assert_matches!(
@@ -286,6 +296,7 @@ fn issues() {
         label_page_size: NonZeroUsize::new(10).unwrap(),
     };
     let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters);
+
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
         payload.query,
@@ -348,6 +359,7 @@ fn issues() {
             ("q1_cursor".into(), serde_json::Value::Null),
         ])
     );
+
     assert_eq!(
         machine.get_output(),
         vec![Output::Transition(Transition::StartFetchRepos)]
@@ -623,8 +635,8 @@ fn issues() {
             }),
         ),
     ]);
-
     assert!(machine.handle_response(response).is_ok());
+
     assert_eq!(machine.get_next_query(), None);
 
     let outputs = machine.get_output();
@@ -694,7 +706,288 @@ fn issues() {
     );
 }
 
+#[test]
+fn extra_labels() {
+    let parameters = Parameters {
+        batch_size: DEFAULT_BATCH_SIZE,
+        page_size: NonZeroUsize::new(100).unwrap(),
+        label_page_size: NonZeroUsize::new(5).unwrap(),
+    };
+    let mut machine = OrgsThenIssues::new(vec!["monocat".into()], parameters);
+
+    let payload = machine.get_next_query().unwrap();
+    assert_eq!(
+        payload.query,
+        indoc! {"
+        query ($q0_owner: String!, $q0_cursor: String) {
+            q0: repositoryOwner(login: $q0_owner) {
+                repositories(
+                    orderBy: {field: NAME, direction: ASC},
+                    ownerAffiliations: [OWNER],
+                    isArchived: false,
+                    isFork: false,
+                    privacy: PUBLIC,
+                    first: 100,
+                    after: $q0_cursor,
+                ) {
+                    nodes {
+                        id
+                        nameWithOwner
+                        issues(states: [OPEN]) {
+                            totalCount
+                        }
+                    }
+                    pageInfo {
+                        endCursor
+                        hasNextPage
+                    }
+                }
+            }
+        }"}
+    );
+    assert_eq!(
+        payload.variables,
+        JsonMap::from_iter([
+            ("q0_owner".into(), "monocat".into()),
+            ("q0_cursor".into(), serde_json::Value::Null),
+        ])
+    );
+
+    assert_eq!(
+        machine.get_output(),
+        vec![Output::Transition(Transition::StartFetchRepos)]
+    );
+
+    let response = JsonMap::from_iter([(
+        "q0".into(),
+        serde_json::json!({
+            "repositories": {
+                "nodes": [
+                    {
+                        "id": "r1",
+                        "nameWithOwner": "monocat/rainbow",
+                        "issues": {
+                            "totalCount": 1,
+                        }
+                    },
+                ],
+                "pageInfo": {
+                    "endCursor": "cursor:end:monocat",
+                    "hasNextPage": false,
+                }
+            }
+        }),
+    )]);
+    assert!(machine.handle_response(response).is_ok());
+
+    let payload = machine.get_next_query().unwrap();
+    assert_eq!(
+        payload.query,
+        indoc! {"
+        query ($q0_repo_id: ID!, $q0_cursor: String) {
+            q0: node(id: $q0_repo_id) {
+                ... on Repository {
+                    nameWithOwner
+                    issues(
+                        first: 100,
+                        after: $q0_cursor,
+                        orderBy: {field: CREATED_AT, direction: ASC},
+                        states: [OPEN],
+                    ) {
+                        nodes {
+                            id
+                            number
+                            title
+                            url
+                            createdAt
+                            updatedAt
+                            labels (first: 5) {
+                                nodes {
+                                    name
+                                }
+                                pageInfo {
+                                    endCursor
+                                    hasNextPage
+                                }
+                            }
+                        }
+                        pageInfo {
+                            endCursor
+                            hasNextPage
+                        }
+                    }
+                }
+            }
+        }"}
+    );
+    assert_eq!(
+        payload.variables,
+        JsonMap::from_iter([
+            ("q0_repo_id".into(), "r1".into()),
+            ("q0_cursor".into(), serde_json::Value::Null),
+        ])
+    );
+
+    let outputs = machine.get_output();
+    assert_eq!(outputs.len(), 2);
+    assert_matches!(
+        outputs[0],
+        Output::Transition(Transition::EndFetchRepos {
+            repositories: 1,
+            repos_with_open_issues: 1,
+            ..
+        })
+    );
+    assert_matches!(
+        outputs[1],
+        Output::Transition(Transition::StartFetchIssues {
+            repos_with_open_issues: 1,
+        })
+    );
+
+    let response = JsonMap::from_iter([(
+        "q0".into(),
+        serde_json::json!({
+            "nameWithOwner": "monocat/rainbow",
+            "issues": {
+                "nodes": [
+                    {
+                        "id": "i1",
+                        "number": 1,
+                        "title": "We need more colors",
+                        "url": "https://example.github/monocat/rainbow/issues/1",
+                        "createdAt": "2020-01-01T00:00:00Z",
+                        "updatedAt": "2020-01-01T00:00:00Z",
+                        "labels": {
+                            "nodes": [
+                                {"name": "colors"},
+                                {"name": "red"},
+                                {"name": "orange"},
+                                {"name": "yellow"},
+                                {"name": "green"},
+                            ],
+                            "pageInfo": {
+                                "endCursor": "cursor:p1:monocat/rainbow:1",
+                                "hasNextPage": true
+                            }
+                        }
+                    },
+                ],
+                "pageInfo": {
+                    "endCursor": "cursor:end:monocat/rainbow",
+                    "hasNextPage": false,
+                }
+            }
+        }),
+    )]);
+    assert!(machine.handle_response(response).is_ok());
+
+    let payload = machine.get_next_query().unwrap();
+    assert_eq!(
+        payload.query,
+        indoc! {"
+        query ($q0_issue_id: ID!, $q0_cursor: String) {
+            q0: node(id: $q0_issue_id) {
+                ... on Issue {
+                    labels(
+                        first: 5,
+                        after: $q0_cursor,
+                    ) {
+                        nodes {
+                            name
+                        }
+                        pageInfo {
+                            endCursor
+                            hasNextPage
+                        }
+                    }
+                }
+            }
+        }"}
+    );
+    assert_eq!(
+        payload.variables,
+        JsonMap::from_iter([
+            ("q0_issue_id".into(), "i1".into()),
+            ("q0_cursor".into(), "cursor:p1:monocat/rainbow:1".into()),
+        ])
+    );
+
+    let outputs = machine.get_output();
+    assert_eq!(outputs.len(), 2);
+    assert_matches!(
+        outputs[0],
+        Output::Transition(Transition::EndFetchIssues { open_issues: 1, .. })
+    );
+    assert_matches!(
+        outputs[1],
+        Output::Transition(Transition::StartFetchLabels {
+            issues_with_extra_labels: 1
+        })
+    );
+
+    let response = JsonMap::from_iter([(
+        "q0".into(),
+        serde_json::json!({
+            "labels": {
+                "nodes": [
+                    {"name": "blue"},
+                    {"name": "indigo"},
+                    {"name": "violet"},
+                ],
+                "pageInfo": {
+                    "endCursor": "cursor:end:monocat/rainbow:1",
+                    "hasNextPage": false,
+                }
+            }
+        }),
+    )]);
+    assert!(machine.handle_response(response).is_ok());
+
+    assert_eq!(machine.get_next_query(), None);
+
+    let outputs = machine.get_output();
+    assert_eq!(outputs.len(), 3);
+    assert_matches!(
+        outputs[0],
+        Output::Transition(Transition::EndFetchLabels {
+            extra_labels: 3,
+            ..
+        })
+    );
+    assert_eq!(
+        outputs[1],
+        Output::Issues(vec![Issue {
+            repo: "monocat/rainbow".into(),
+            number: 1,
+            title: "We need more colors".into(),
+            labels: vec![
+                "colors".into(),
+                "red".into(),
+                "orange".into(),
+                "yellow".into(),
+                "green".into(),
+                "blue".into(),
+                "indigo".into(),
+                "violet".into()
+            ],
+            url: "https://example.github/monocat/rainbow/issues/1".into(),
+            created: "2020-01-01T00:00:00Z".into(),
+            updated: "2020-01-01T00:00:00Z".into(),
+        },])
+    );
+    assert_eq!(
+        outputs[2],
+        Output::Report(FetchReport {
+            repositories: 1,
+            repos_with_open_issues: 1,
+            open_issues: 1,
+            issues_with_extra_labels: 1,
+            extra_labels: 3,
+        })
+    );
+}
+
 // multiple pages of repos
 // multiple pages of issues
-// issues with extra labels
-// issues with multiple pages of labels
+// multiple pages of extra labels
