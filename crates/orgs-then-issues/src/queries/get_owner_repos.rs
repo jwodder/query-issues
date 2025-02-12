@@ -1,5 +1,5 @@
 use crate::types::Repository;
-use gqlient::{Cursor, Ided, Page, Paginator, Query, Singleton, Variable};
+use gqlient::{Cursor, Page, Paginator, Query, Singleton, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
@@ -17,7 +17,7 @@ impl GetOwnerRepos {
 }
 
 impl Paginator for GetOwnerRepos {
-    type Item = Ided<Repository>;
+    type Item = Repository;
     type Query = GetOwnerReposQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetOwnerReposQuery {
@@ -59,7 +59,7 @@ impl GetOwnerReposQuery {
 }
 
 impl Query for GetOwnerReposQuery {
-    type Output = Page<Ided<Repository>>;
+    type Output = Page<Repository>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
         self.prefix = Some(prefix);

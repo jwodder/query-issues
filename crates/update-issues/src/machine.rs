@@ -12,46 +12,92 @@ pub(crate) struct UpdateIssues<'a> {
     db: &'a mut Database,
     parameters: Parameters,
     state: State,
+    owners: Vec<String>,
     results: Vec<Output>,
     report: FetchReport,
+    repos: Vec<Ided<RepoDetails>>,
+    label_queries: Vec<(Id, GetLabels)>,
     // The first Id is the issue ID; the second Id is the ID of the repo the
     // issue belongs to.
-    issues: HashMap<Id, (Id, Issue)>,
+    issues_needing_labels: HashMap<Id, (Id, Issue)>,
 }
 
 impl<'a> UpdateIssues<'a> {
     pub(crate) fn new(db: &'a mut Database, owners: Vec<String>, parameters: Parameters) -> Self {
-        let submachine = BatchPaginator::new(
-            owners.into_iter().map(|owner| {
-                (
-                    owner.clone(),
-                    GetOwnerRepos::new(owner, parameters.page_size),
-                )
-            }),
-            parameters.batch_size,
-        );
         UpdateIssues {
             db,
             parameters,
-            state: State::Start { submachine },
+            state: State::Start,
+            owners,
             results: Vec::new(),
             report: FetchReport::default(),
-            issues: HashMap::new(),
+            repos: Vec::new(),
+            label_queries: Vec::new(),
+            issues_needing_labels: HashMap::new(),
         }
     }
 
-    fn done(&mut self) {
-        let mut idiff = IssueDiff::default();
-        for (issue_id, (repo_id, issue)) in std::mem::take(&mut self.issues) {
-            let Some(repo) = self.db.get_mut(&repo_id) else {
-                // TODO: Warn? Error?
-                continue;
-            };
-            idiff += repo.update_issue(issue_id, issue);
+    fn start_fetch_repos(&mut self) -> Option<QueryPayload> {
+        let mut submachine = BatchPaginator::new(
+            std::mem::take(&mut self.owners).into_iter().map(|owner| {
+                (
+                    owner.clone(),
+                    GetOwnerRepos::new(owner, self.parameters.page_size),
+                )
+            }),
+            self.parameters.batch_size,
+        );
+        let query = submachine.get_next_query()?;
+        self.results
+            .push(Output::Transition(Transition::StartFetchRepos));
+        self.state = State::FetchRepos {
+            submachine,
+            start: Instant::now(),
+        };
+        Some(query)
+    }
+
+    fn start_fetch_issues(&mut self) -> Option<QueryPayload> {
+        let paginators = self
+            .db
+            .issue_paginators(self.parameters.page_size, self.parameters.label_page_size);
+        let mut submachine = BatchPaginator::new(paginators, self.parameters.batch_size);
+        let query = submachine.get_next_query()?;
+        self.results
+            .push(Output::Transition(Transition::StartFetchIssues {
+                repos_with_open_issues: self.report.repos_with_open_issues,
+            }));
+        self.state = State::FetchIssues {
+            submachine,
+            start: Instant::now(),
+        };
+        Some(query)
+    }
+
+    fn start_fetch_labels(&mut self) -> Option<QueryPayload> {
+        let mut submachine = BatchPaginator::new(
+            std::mem::take(&mut self.label_queries),
+            self.parameters.batch_size,
+        );
+        let query = submachine.get_next_query()?;
+        self.results
+            .push(Output::Transition(Transition::StartFetchLabels {
+                issues_with_extra_labels: self.report.issues_with_extra_labels,
+            }));
+        self.state = State::FetchLabels {
+            submachine,
+            start: Instant::now(),
+        };
+        Some(query)
+    }
+
+    fn done(&mut self) -> Option<QueryPayload> {
+        for (issue_id, (repo_id, issue)) in std::mem::take(&mut self.issues_needing_labels) {
+            self.report.issue_diff += self.db.update_issue(repo_id, issue_id, issue);
         }
-        self.results.push(Output::IssueDiff(idiff));
         self.results.push(Output::Report(self.report));
         self.state = State::Done;
+        None
     }
 }
 
@@ -60,67 +106,24 @@ impl QueryMachine for UpdateIssues<'_> {
 
     fn get_next_query(&mut self) -> Option<QueryPayload> {
         match &mut self.state {
-            State::Start { submachine } => {
-                let query = submachine.get_next_query();
-                if query.is_some() {
-                    self.state = State::FetchRepos {
-                        submachine: std::mem::take(submachine),
-                        repos: Vec::new(),
-                        start: Instant::now(),
-                    };
-                    self.results
-                        .push(Output::Transition(Transition::StartFetchRepos));
-                } else {
-                    self.done();
-                }
-                query
-            }
-            State::FetchRepos {
-                submachine,
-                repos,
-                start,
-            } => {
+            State::Start => self.start_fetch_repos().or_else(|| self.done()),
+            State::FetchRepos { submachine, start } => {
                 let query = submachine.get_next_query();
                 if query.is_some() {
                     query
                 } else {
-                    self.report.repositories = repos.len();
                     self.results
                         .push(Output::Transition(Transition::EndFetchRepos {
                             repositories: self.report.repositories,
+                            repos_with_open_issues: self.report.repos_with_open_issues,
                             elapsed: start.elapsed(),
                         }));
-                    let rdiff = self.db.update_repositories(std::mem::take(repos));
+                    let rdiff = self.db.update_repositories(std::mem::take(&mut self.repos));
                     self.results.push(Output::RepoDiff(rdiff));
-                    let paginators = self.db.issue_paginators(
-                        self.parameters.page_size,
-                        self.parameters.label_page_size,
-                    );
-                    self.report.repos_with_open_issues = paginators.len();
-                    let mut submachine =
-                        BatchPaginator::new(paginators, self.parameters.batch_size);
-                    let query = submachine.get_next_query();
-                    if query.is_some() {
-                        self.results
-                            .push(Output::Transition(Transition::StartFetchIssues {
-                                repos_with_open_issues: self.report.repos_with_open_issues,
-                            }));
-                        self.state = State::FetchIssues {
-                            submachine,
-                            start: Instant::now(),
-                            label_queries: Vec::new(),
-                        };
-                    } else {
-                        self.done();
-                    }
-                    query
+                    self.start_fetch_issues().or_else(|| self.done())
                 }
             }
-            State::FetchIssues {
-                submachine,
-                start,
-                label_queries,
-            } => {
+            State::FetchIssues { submachine, start } => {
                 let query = submachine.get_next_query();
                 if query.is_some() {
                     query
@@ -130,24 +133,7 @@ impl QueryMachine for UpdateIssues<'_> {
                             issues: self.report.issues,
                             elapsed: start.elapsed(),
                         }));
-                    let mut submachine = BatchPaginator::new(
-                        std::mem::take(label_queries),
-                        self.parameters.batch_size,
-                    );
-                    let query = submachine.get_next_query();
-                    if query.is_some() {
-                        self.results
-                            .push(Output::Transition(Transition::StartFetchLabels {
-                                issues_with_extra_labels: self.report.issues_with_extra_labels,
-                            }));
-                        self.state = State::FetchLabels {
-                            submachine,
-                            start: Instant::now(),
-                        };
-                    } else {
-                        self.done();
-                    }
-                    query
+                    self.start_fetch_labels().or_else(|| self.done())
                 }
             }
             State::FetchLabels { submachine, start } => {
@@ -160,8 +146,7 @@ impl QueryMachine for UpdateIssues<'_> {
                             extra_labels: self.report.extra_labels,
                             elapsed: start.elapsed(),
                         }));
-                    self.done();
-                    None
+                    self.done()
                 }
             }
             State::Done => None,
@@ -170,20 +155,25 @@ impl QueryMachine for UpdateIssues<'_> {
 
     fn handle_response(&mut self, data: JsonMap) -> Result<(), serde_json::Error> {
         match &mut self.state {
-            State::Start { .. } => {
+            State::Start => {
                 panic!("handle_response() called before get_next_query()")
             }
-            State::FetchRepos {
-                submachine, repos, ..
-            } => {
+            State::FetchRepos { submachine, .. } => {
                 submachine.handle_response(data)?;
-                repos.extend(submachine.get_output().into_iter().flat_map(|pr| pr.items));
+                self.repos.extend(
+                    submachine
+                        .get_output()
+                        .into_iter()
+                        .flat_map(|pr| pr.items)
+                        .inspect(|repo| {
+                            self.report.repositories += 1;
+                            if repo.data.open_issues > 0 {
+                                self.report.repos_with_open_issues += 1;
+                            }
+                        }),
+                );
             }
-            State::FetchIssues {
-                submachine,
-                label_queries,
-                ..
-            } => {
+            State::FetchIssues { submachine, .. } => {
                 submachine.handle_response(data)?;
                 for PaginationResults {
                     key: repo_id,
@@ -202,10 +192,14 @@ impl QueryMachine for UpdateIssues<'_> {
                         self.report.issues += 1;
                         if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size) {
                             self.report.issues_with_extra_labels += 1;
-                            label_queries.push(q);
+                            self.label_queries.push(q);
+                            self.issues_needing_labels
+                                .insert(iwl.issue_id, (repo_id.clone(), iwl.issue));
+                        } else {
+                            self.report.issue_diff +=
+                                self.db
+                                    .update_issue(repo_id.clone(), iwl.issue_id, iwl.issue);
                         }
-                        self.issues
-                            .insert(iwl.issue_id, (repo_id.clone(), iwl.issue));
                     }
                 }
             }
@@ -213,7 +207,7 @@ impl QueryMachine for UpdateIssues<'_> {
                 submachine.handle_response(data)?;
                 for res in submachine.get_output() {
                     self.report.extra_labels += res.items.len();
-                    self.issues
+                    self.issues_needing_labels
                         .get_mut(&res.key)
                         .expect("Issues we get labels for should have already been seen")
                         .1
@@ -232,18 +226,14 @@ impl QueryMachine for UpdateIssues<'_> {
 }
 
 enum State {
-    Start {
-        submachine: BatchPaginator<String, GetOwnerRepos>,
-    },
+    Start,
     FetchRepos {
         submachine: BatchPaginator<String, GetOwnerRepos>,
         start: Instant,
-        repos: Vec<Ided<RepoDetails>>,
     },
     FetchIssues {
         submachine: BatchPaginator<Id, GetIssues>,
         start: Instant,
-        label_queries: Vec<(Id, GetLabels)>,
     },
     FetchLabels {
         submachine: BatchPaginator<Id, GetLabels>,
@@ -265,7 +255,6 @@ pub(crate) enum Output {
     Transition(Transition),
     Report(FetchReport),
     RepoDiff(RepoDiff),
-    IssueDiff(IssueDiff),
 }
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
@@ -273,6 +262,7 @@ pub(crate) struct FetchReport {
     repositories: usize,
     repos_with_open_issues: usize,
     issues: usize,
+    pub(crate) issue_diff: IssueDiff,
     issues_with_extra_labels: usize,
     extra_labels: usize,
 }
@@ -282,6 +272,7 @@ pub(crate) enum Transition {
     StartFetchRepos,
     EndFetchRepos {
         repositories: usize,
+        repos_with_open_issues: usize,
         elapsed: Duration,
     },
     StartFetchIssues {
@@ -306,9 +297,10 @@ impl fmt::Display for Transition {
             Transition::StartFetchRepos => write!(f, "Fetching repositories …"),
             Transition::EndFetchRepos {
                 repositories,
+                repos_with_open_issues,
                 elapsed,
             } => {
-                write!(f, "Fetched {repositories} repositories in {elapsed:?}")
+                write!(f, "Fetched {repositories} repositories ({repos_with_open_issues} with open issues) in {elapsed:?}")
             }
             Transition::StartFetchIssues {
                 repos_with_open_issues,
