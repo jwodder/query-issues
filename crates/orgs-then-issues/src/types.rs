@@ -1,14 +1,30 @@
-use crate::queries::GetLabels;
+use crate::queries::{GetIssues, GetLabels};
 use gqlient::{Cursor, Id, Page, Singleton};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 pub(crate) struct Repository {
+    pub(crate) id: Id,
     #[serde(rename = "nameWithOwner")]
     pub(crate) fullname: String,
     #[serde(rename = "issues", deserialize_with = "gqlient::singleton_field")]
     pub(crate) open_issues: u64,
+}
+
+impl Repository {
+    pub(crate) fn issues_query(
+        &self,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> Option<(Id, GetIssues)> {
+        (self.open_issues > 0).then(|| {
+            (
+                self.id.clone(),
+                GetIssues::new(self.id.clone(), page_size, label_page_size),
+            )
+        })
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
@@ -17,13 +33,6 @@ pub(crate) struct RepoWithIssues {
     pub(crate) issues: Vec<IssueWithLabels>,
     pub(crate) issue_cursor: Option<Cursor>,
     pub(crate) has_more_issues: bool,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-struct RawRepoDetails {
-    name_with_owner: String,
-    issues: Page<RawIssue>,
 }
 
 impl From<RawRepoDetails> for RepoWithIssues {
@@ -54,7 +63,7 @@ impl From<RawRepoDetails> for RepoWithIssues {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(crate) struct Issue {
     pub(crate) repo: String,
     pub(crate) number: u64,
@@ -67,7 +76,7 @@ pub(crate) struct Issue {
     pub(crate) updated: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct IssueWithLabels {
     pub(crate) issue_id: Id,
     pub(crate) issue: Issue,
@@ -91,6 +100,13 @@ impl IssueWithLabels {
             )
         })
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct RawRepoDetails {
+    name_with_owner: String,
+    issues: Page<RawIssue>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
