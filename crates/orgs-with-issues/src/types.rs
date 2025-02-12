@@ -1,4 +1,4 @@
-use crate::queries::GetLabels;
+use crate::queries::{GetIssues, GetLabels};
 use gqlient::{Cursor, Id, Page, Singleton};
 use serde::{Deserialize, Serialize};
 use std::num::NonZeroUsize;
@@ -6,21 +6,36 @@ use std::num::NonZeroUsize;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(from = "RawRepoDetails")]
 pub(crate) struct RepoWithIssues {
+    pub(crate) id: Id,
     pub(crate) issues: Vec<IssueWithLabels>,
     pub(crate) issue_cursor: Option<Cursor>,
     pub(crate) has_more_issues: bool,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(rename_all = "camelCase")]
-struct RawRepoDetails {
-    name_with_owner: String,
-    issues: Page<RawIssue>,
+impl RepoWithIssues {
+    pub(crate) fn more_issues_query(
+        &self,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> Option<(Id, GetIssues)> {
+        self.has_more_issues.then(|| {
+            (
+                self.id.clone(),
+                GetIssues::new(
+                    self.id.clone(),
+                    self.issue_cursor.clone(),
+                    page_size,
+                    label_page_size,
+                ),
+            )
+        })
+    }
 }
 
 impl From<RawRepoDetails> for RepoWithIssues {
     fn from(value: RawRepoDetails) -> RepoWithIssues {
         RepoWithIssues {
+            id: value.id,
             issues: value
                 .issues
                 .items
@@ -81,6 +96,14 @@ impl IssueWithLabels {
             )
         })
     }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+#[serde(rename_all = "camelCase")]
+struct RawRepoDetails {
+    id: Id,
+    name_with_owner: String,
+    issues: Page<RawIssue>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

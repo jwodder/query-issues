@@ -99,6 +99,7 @@ impl Query for GetIssuesQuery {
             indoc! {"
             node(id: ${repo_id_varname}) {{
                 ... on Repository {{
+                    id
                     nameWithOwner
                     issues(
                         first: {page_size},

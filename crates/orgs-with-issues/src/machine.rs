@@ -1,6 +1,6 @@
 use crate::queries::{GetIssues, GetLabels, GetOwnerRepos};
 use crate::types::Issue;
-use gqlient::{BatchPaginator, Id, Ided, JsonMap, QueryMachine, QueryPayload};
+use gqlient::{BatchPaginator, Id, JsonMap, QueryMachine, QueryPayload};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::fmt;
@@ -163,10 +163,15 @@ impl QueryMachine for OrgsWithIssues {
             State::FetchRepos { submachine, .. } => {
                 submachine.handle_response(data)?;
                 let mut issues_out = Vec::new();
-                for Ided { id, data: repo } in
-                    submachine.get_output().into_iter().flat_map(|pr| pr.items)
-                {
+                for repo in submachine.get_output().into_iter().flat_map(|pr| pr.items) {
                     self.report.repositories += 1;
+                    if let Some(q) = repo.more_issues_query(
+                        self.parameters.page_size,
+                        self.parameters.label_page_size,
+                    ) {
+                        self.report.repos_with_extra_issues += 1;
+                        self.issue_queries.push(q);
+                    }
                     if !repo.issues.is_empty() {
                         self.report.repos_with_open_issues += 1;
                         for iwl in repo.issues {
@@ -180,18 +185,6 @@ impl QueryMachine for OrgsWithIssues {
                                 issues_out.push(iwl.issue);
                             }
                         }
-                    }
-                    if repo.has_more_issues {
-                        self.report.repos_with_extra_issues += 1;
-                        self.issue_queries.push((
-                            id.clone(),
-                            GetIssues::new(
-                                id,
-                                repo.issue_cursor,
-                                self.parameters.page_size,
-                                self.parameters.label_page_size,
-                            ),
-                        ));
                     }
                 }
                 if !issues_out.is_empty() {
