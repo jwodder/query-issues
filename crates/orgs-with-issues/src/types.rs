@@ -46,7 +46,7 @@ impl From<RawRepoDetails> for RepoWithIssues {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(crate) struct Issue {
     pub(crate) repo: String,
     pub(crate) number: u64,
@@ -57,7 +57,7 @@ pub(crate) struct Issue {
     pub(crate) updated: String,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct IssueWithLabels {
     pub(crate) issue_id: Id,
     pub(crate) issue: Issue,
