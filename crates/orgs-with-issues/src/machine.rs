@@ -46,18 +46,14 @@ impl OrgsWithIssues {
             }),
             self.parameters.batch_size,
         );
-        let query = submachine.get_next_query();
-        debug_assert!(
-            query.is_some(),
-            "start_fetch_repos should only be called when there are owners to query"
-        );
+        let query = submachine.get_next_query()?;
         self.results
             .push(Output::Transition(Transition::StartFetchRepos));
         self.state = State::FetchRepos {
             submachine,
             start: Instant::now(),
         };
-        query
+        Some(query)
     }
 
     fn start_fetch_issues(&mut self) -> Option<QueryPayload> {
@@ -65,11 +61,7 @@ impl OrgsWithIssues {
             std::mem::take(&mut self.issue_queries),
             self.parameters.batch_size,
         );
-        let query = submachine.get_next_query();
-        debug_assert!(
-            query.is_some(),
-            "start_fetch_issues should only be called when there are issues to query"
-        );
+        let query = submachine.get_next_query()?;
         self.results
             .push(Output::Transition(Transition::StartFetchIssues {
                 repos_with_extra_issues: self.report.repos_with_extra_issues,
@@ -78,7 +70,7 @@ impl OrgsWithIssues {
             submachine,
             start: Instant::now(),
         };
-        query
+        Some(query)
     }
 
     fn start_fetch_labels(&mut self) -> Option<QueryPayload> {
@@ -86,11 +78,7 @@ impl OrgsWithIssues {
             std::mem::take(&mut self.label_queries),
             self.parameters.batch_size,
         );
-        let query = submachine.get_next_query();
-        debug_assert!(
-            query.is_some(),
-            "start_fetch_issues should only be called when there are labels to query"
-        );
+        let query = submachine.get_next_query()?;
         self.results
             .push(Output::Transition(Transition::StartFetchLabels {
                 issues_with_extra_labels: self.report.issues_with_extra_labels,
@@ -99,7 +87,7 @@ impl OrgsWithIssues {
             submachine,
             start: Instant::now(),
         };
-        query
+        Some(query)
     }
 
     fn done(&mut self) -> Option<QueryPayload> {
@@ -114,13 +102,7 @@ impl QueryMachine for OrgsWithIssues {
 
     fn get_next_query(&mut self) -> Option<QueryPayload> {
         match &mut self.state {
-            State::Start => {
-                if !self.owners.is_empty() {
-                    self.start_fetch_repos()
-                } else {
-                    self.done()
-                }
-            }
+            State::Start => self.start_fetch_repos().or_else(|| self.done()),
             State::FetchRepos { submachine, start } => {
                 let query = submachine.get_next_query();
                 if query.is_some() {
@@ -133,13 +115,9 @@ impl QueryMachine for OrgsWithIssues {
                             open_issues: self.report.open_issues,
                             elapsed: start.elapsed(),
                         }));
-                    if !self.issue_queries.is_empty() {
-                        self.start_fetch_issues()
-                    } else if !self.label_queries.is_empty() {
-                        self.start_fetch_labels()
-                    } else {
-                        self.done()
-                    }
+                    self.start_fetch_issues()
+                        .or_else(|| self.start_fetch_labels())
+                        .or_else(|| self.done())
                 }
             }
             State::FetchIssues { submachine, start } => {
@@ -152,11 +130,7 @@ impl QueryMachine for OrgsWithIssues {
                             extra_issues: self.report.extra_issues,
                             elapsed: start.elapsed(),
                         }));
-                    if !self.label_queries.is_empty() {
-                        self.start_fetch_labels()
-                    } else {
-                        self.done()
-                    }
+                    self.start_fetch_labels().or_else(|| self.done())
                 }
             }
             State::FetchLabels { submachine, start } => {
