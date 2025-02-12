@@ -49,8 +49,9 @@ impl Database {
                 newmap.insert(id, repo_w_issues);
             } else {
                 newmap.insert(
-                    id,
+                    id.clone(),
                     RepoWithIssues {
+                        id,
                         repository: repo,
                         issue_cursor: None,
                         issues: BTreeMap::new(),
@@ -70,25 +71,15 @@ impl Database {
         label_page_size: NonZeroUsize,
     ) -> Vec<(Id, GetIssues)> {
         self.0
-            .iter()
-            .filter(|(_, repo)| repo.repository.open_issues != 0)
-            .map(move |(id, repo)| {
-                (
-                    id.clone(),
-                    GetIssues::new(
-                        id.clone(),
-                        repo.issue_cursor.clone(),
-                        page_size,
-                        label_page_size,
-                    ),
-                )
-            })
+            .values()
+            .filter_map(|repo| repo.issues_query(page_size, label_page_size))
             .collect()
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub(crate) struct RepoWithIssues {
+    id: Id,
     #[serde(deserialize_with = "deser_repo_details")]
     repository: RepoDetails,
     issue_cursor: Option<Cursor>,
@@ -120,6 +111,24 @@ impl RepoWithIssues {
             }
         }
         report
+    }
+
+    fn issues_query(
+        &self,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> Option<(Id, GetIssues)> {
+        (self.repository.open_issues > 0).then(|| {
+            (
+                self.id.clone(),
+                GetIssues::new(
+                    self.id.clone(),
+                    self.issue_cursor.clone(),
+                    page_size,
+                    label_page_size,
+                ),
+            )
+        })
     }
 }
 
