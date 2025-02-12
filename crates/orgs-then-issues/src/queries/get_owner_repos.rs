@@ -67,7 +67,7 @@ impl Query for GetOwnerReposQuery {
     }
 
     fn write_graphql<W: Write>(&self, mut s: W) -> fmt::Result {
-        writeln!(
+        write!(
             s,
             indoc! {"
             repositoryOwner(login: ${owner_varname}) {{

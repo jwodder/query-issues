@@ -282,3 +282,6 @@ impl fmt::Display for Transition {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;
