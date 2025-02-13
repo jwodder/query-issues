@@ -4,8 +4,8 @@
 [![Minimum Supported Rust Version](https://img.shields.io/badge/MSRV-1.79-orange)](https://www.rust-lang.org)
 [![MIT License](https://img.shields.io/github/license/jwodder/query-issues.svg)](https://opensource.org/licenses/MIT)
 
-This is an experiment in determining the fastest way to use GitHub's GraphQL
-API to fetch all open issues in all (public, non-archived, non-fork)
+This is an experiment in determining the most efficient way to use GitHub's
+GraphQL API to fetch all open issues in all (public, non-archived, non-fork)
 repositories belonging to a collection of owners/organizations.  Each binary
 package in this workspace implements a different strategy, detailed below.
 
