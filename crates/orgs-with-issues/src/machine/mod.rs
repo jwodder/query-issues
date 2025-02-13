@@ -7,6 +7,7 @@ use std::fmt;
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct OrgsWithIssues {
     parameters: Parameters,
     state: State,
@@ -230,6 +231,7 @@ impl QueryMachine for OrgsWithIssues {
     }
 }
 
+#[derive(Clone, Debug, Eq, PartialEq)]
 enum State {
     Start,
     FetchRepos {
