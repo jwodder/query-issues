@@ -551,11 +551,13 @@ name = "orgs-with-issues"
 version = "0.1.0-dev"
 dependencies = [
  "anyhow",
+ "assert_matches",
  "clap",
  "gqlient",
  "humantime",
  "indoc",
  "patharg",
+ "pretty_assertions",
  "serde",
  "serde-jsonlines",
  "serde_json",
