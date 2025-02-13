@@ -1,7 +1,7 @@
 #!/bin/bash
 set -ex
 
-commands=(orgs-then-issues orgs-with-issues update-issues)
+commands=(orgs-then-issues orgs-with-issues)
 orgs=(jwodder wheelodex)
 
 for cmd in "${commands[@]}"
