@@ -204,8 +204,8 @@ impl RateLimit {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct QueryPayload {
-    query: String,
-    variables: JsonMap,
+    pub query: String,
+    pub variables: JsonMap,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]

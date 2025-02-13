@@ -14,7 +14,6 @@ concurrency:
 
 jobs:
   test:
-    if: false  # Disabled for now
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -24,8 +23,8 @@ jobs:
         toolchain:
           - msrv
           - stable
-          - beta
-          - nightly
+          #- beta
+          #- nightly
         include:
           - os: macos-latest
             toolchain: stable
@@ -68,7 +67,6 @@ jobs:
         run: cargo hack --workspace --feature-powerset test --verbose
 
   minimal-versions:
-    if: false  # Disabled for now
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -99,7 +97,6 @@ jobs:
         run: cargo minimal-versions --direct --workspace --feature-powerset test --verbose
 
   coverage:
-    if: false  # Disabled for now
     # This is separate from the main tests because cargo-llvm-cov doesn't run
     # doctests.
     runs-on: ubuntu-latest

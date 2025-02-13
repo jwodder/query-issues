@@ -7,7 +7,7 @@ use std::fmt;
 use std::num::NonZeroUsize;
 use std::time::{Duration, Instant};
 
-pub(crate) struct OrgsThenIssues {
+pub(crate) struct OrgsWithIssues {
     parameters: Parameters,
     state: State,
     owners: Vec<String>,
@@ -18,9 +18,9 @@ pub(crate) struct OrgsThenIssues {
     issues_needing_labels: HashMap<Id, Issue>,
 }
 
-impl OrgsThenIssues {
-    pub(crate) fn new(owners: Vec<String>, parameters: Parameters) -> OrgsThenIssues {
-        OrgsThenIssues {
+impl OrgsWithIssues {
+    pub(crate) fn new(owners: Vec<String>, parameters: Parameters) -> OrgsWithIssues {
+        OrgsWithIssues {
             parameters,
             state: State::Start,
             owners,
@@ -37,7 +37,11 @@ impl OrgsThenIssues {
             std::mem::take(&mut self.owners).into_iter().map(|owner| {
                 (
                     owner.clone(),
-                    GetOwnerRepos::new(owner, self.parameters.page_size),
+                    GetOwnerRepos::new(
+                        owner,
+                        self.parameters.page_size,
+                        self.parameters.label_page_size,
+                    ),
                 )
             }),
             self.parameters.batch_size,
@@ -60,7 +64,7 @@ impl OrgsThenIssues {
         let query = submachine.get_next_query()?;
         self.results
             .push(Output::Transition(Transition::StartFetchIssues {
-                repos_with_open_issues: self.report.repos_with_open_issues,
+                repos_with_extra_issues: self.report.repos_with_extra_issues,
             }));
         self.state = State::FetchIssues {
             submachine,
@@ -93,7 +97,7 @@ impl OrgsThenIssues {
     }
 }
 
-impl QueryMachine for OrgsThenIssues {
+impl QueryMachine for OrgsWithIssues {
     type Output = Output;
 
     fn get_next_query(&mut self) -> Option<QueryPayload> {
@@ -108,9 +112,12 @@ impl QueryMachine for OrgsThenIssues {
                         .push(Output::Transition(Transition::EndFetchRepos {
                             repositories: self.report.repositories,
                             repos_with_open_issues: self.report.repos_with_open_issues,
+                            open_issues: self.report.open_issues,
                             elapsed: start.elapsed(),
                         }));
-                    self.start_fetch_issues().or_else(|| self.done())
+                    self.start_fetch_issues()
+                        .or_else(|| self.start_fetch_labels())
+                        .or_else(|| self.done())
                 }
             }
             State::FetchIssues { submachine, start } => {
@@ -120,7 +127,7 @@ impl QueryMachine for OrgsThenIssues {
                 } else {
                     self.results
                         .push(Output::Transition(Transition::EndFetchIssues {
-                            open_issues: self.report.open_issues,
+                            extra_issues: self.report.extra_issues,
                             elapsed: start.elapsed(),
                         }));
                     self.start_fetch_labels().or_else(|| self.done())
@@ -155,14 +162,33 @@ impl QueryMachine for OrgsThenIssues {
             }
             State::FetchRepos { submachine, .. } => {
                 submachine.handle_response(data)?;
+                let mut issues_out = Vec::new();
                 for repo in submachine.get_output().into_iter().flat_map(|pr| pr.items) {
                     self.report.repositories += 1;
-                    if let Some(q) = repo
-                        .issues_query(self.parameters.page_size, self.parameters.label_page_size)
-                    {
-                        self.report.repos_with_open_issues += 1;
+                    if let Some(q) = repo.more_issues_query(
+                        self.parameters.page_size,
+                        self.parameters.label_page_size,
+                    ) {
+                        self.report.repos_with_extra_issues += 1;
                         self.issue_queries.push(q);
                     }
+                    if !repo.issues.is_empty() {
+                        self.report.repos_with_open_issues += 1;
+                        for iwl in repo.issues {
+                            self.report.open_issues += 1;
+                            if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size)
+                            {
+                                self.report.issues_with_extra_labels += 1;
+                                self.label_queries.push(q);
+                                self.issues_needing_labels.insert(iwl.issue_id, iwl.issue);
+                            } else {
+                                issues_out.push(iwl.issue);
+                            }
+                        }
+                    }
+                }
+                if !issues_out.is_empty() {
+                    self.results.push(Output::Issues(issues_out));
                 }
             }
             State::FetchIssues { submachine, .. } => {
@@ -170,6 +196,7 @@ impl QueryMachine for OrgsThenIssues {
                 let mut issues_out = Vec::new();
                 for iwl in submachine.get_output().into_iter().flat_map(|pr| pr.items) {
                     self.report.open_issues += 1;
+                    self.report.extra_issues += 1;
                     if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size) {
                         self.report.issues_with_extra_labels += 1;
                         self.label_queries.push(q);
@@ -240,7 +267,9 @@ pub(crate) struct FetchReport {
     repositories: usize,
     open_issues: usize,
     repos_with_open_issues: usize,
+    repos_with_extra_issues: usize,
     issues_with_extra_labels: usize,
+    extra_issues: usize,
     extra_labels: usize,
 }
 
@@ -250,13 +279,14 @@ pub(crate) enum Transition {
     EndFetchRepos {
         repositories: usize,
         repos_with_open_issues: usize,
+        open_issues: usize,
         elapsed: Duration,
     },
     StartFetchIssues {
-        repos_with_open_issues: usize,
+        repos_with_extra_issues: usize,
     },
     EndFetchIssues {
-        open_issues: usize,
+        extra_issues: usize,
         elapsed: Duration,
     },
     StartFetchLabels {
@@ -272,13 +302,16 @@ impl fmt::Display for Transition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Transition::StartFetchRepos => write!(f, "Fetching repositories …"),
-            Transition::EndFetchRepos { repositories, repos_with_open_issues, elapsed } => write!(f, "Fetched {repositories} repositories ({repos_with_open_issues} with open issues) in {elapsed:?}"),
-            Transition::StartFetchIssues { repos_with_open_issues } => {
-                write!(f, "Fetching issues for {repos_with_open_issues} repositories …")
+            Transition::EndFetchRepos { repositories, repos_with_open_issues, open_issues, elapsed } => write!(f, "Fetched {repositories} repositories ({repos_with_open_issues} with open issues; {open_issues} open issues in total) in {elapsed:?}"),
+            Transition::StartFetchIssues { repos_with_extra_issues } => {
+                write!(f, "Fetching more issues for {repos_with_extra_issues} repositories …")
             }
-            Transition::EndFetchIssues { open_issues, elapsed } => write!(f, "Fetched {open_issues} issues in {elapsed:?}"),
+            Transition::EndFetchIssues { extra_issues, elapsed } => write!(f, "Fetched {extra_issues} more issues in {elapsed:?}"),
             Transition::StartFetchLabels { issues_with_extra_labels } => write!(f, "Fetching more labels for {issues_with_extra_labels} issues …"),
             Transition::EndFetchLabels { extra_labels, elapsed } => write!(f, "Fetched {extra_labels} more labels in {elapsed:?}"),
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

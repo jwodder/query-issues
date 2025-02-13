@@ -79,6 +79,7 @@ impl<K, P: Paginator> QueryMachine for BatchPaginator<K, P> {
         let mut varstr = String::new();
         let mut qstr = String::new();
         let mut qwrite = indented(&mut qstr).with_str("    ");
+        let mut first_var = true;
         for (i, state) in self
             .in_progress
             .drain(0..(self.in_progress.len().min(self.batch_size.get())))
@@ -90,7 +91,7 @@ impl<K, P: Paginator> QueryMachine for BatchPaginator<K, P> {
                 .for_cursor(state.cursor.as_ref())
                 .with_variable_prefix(alias.clone());
             for (name, Variable { gql_type, value }) in query.variables() {
-                if i > 0 {
+                if !std::mem::replace(&mut first_var, false) {
                     write!(&mut varstr, ", ").expect("writing to a string should not fail");
                 }
                 write!(&mut varstr, "${name}: {gql_type}")
@@ -100,10 +101,10 @@ impl<K, P: Paginator> QueryMachine for BatchPaginator<K, P> {
             write!(&mut qwrite, "{alias}: ").expect("writing to a string should not fail");
             query
                 .write_graphql(&mut qwrite)
-                .expect("writng to a string should not fail");
+                .expect("writing to a string should not fail");
             self.active.insert(alias, ActiveQuery { state, query });
         }
-        let full_query = format!("query ({varstr}) {{\n{qstr}}}\n");
+        let full_query = format!("query ({varstr}) {{\n{qstr}}}");
         Some(QueryPayload {
             query: full_query,
             variables,

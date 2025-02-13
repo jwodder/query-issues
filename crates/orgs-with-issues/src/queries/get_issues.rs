@@ -94,7 +94,7 @@ impl Query for GetIssuesQuery {
     }
 
     fn write_graphql<W: Write>(&self, mut s: W) -> fmt::Result {
-        writeln!(
+        write!(
             s,
             indoc! {"
             node(id: ${repo_id_varname}) {{
