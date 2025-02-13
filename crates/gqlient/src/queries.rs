@@ -8,20 +8,20 @@ use std::collections::{
 use std::fmt::Write;
 use std::num::NonZeroUsize;
 
-pub trait Query: Sized {
+pub trait QuerySelection: Sized {
     type Output;
 
     fn with_variable_prefix(self, prefix: String) -> Self;
-    fn write_graphql<W: Write>(&self, s: W) -> std::fmt::Result;
+    fn write_selection<W: Write>(&self, s: W) -> std::fmt::Result;
     fn variables(&self) -> impl IntoIterator<Item = (String, Variable)>;
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error>;
 }
 
 pub trait Paginator {
-    type Query: Query<Output = Page<Self::Item>>;
+    type Selection: QuerySelection<Output = Page<Self::Item>>;
     type Item;
 
-    fn for_cursor(&self, cursor: Option<&Cursor>) -> Self::Query;
+    fn for_cursor(&self, cursor: Option<&Cursor>) -> Self::Selection;
 }
 
 pub trait QueryMachine {
@@ -100,7 +100,7 @@ impl<K, P: Paginator> QueryMachine for BatchPaginator<K, P> {
             }
             write!(&mut qwrite, "{alias}: ").expect("writing to a string should not fail");
             query
-                .write_graphql(&mut qwrite)
+                .write_selection(&mut qwrite)
                 .expect("writing to a string should not fail");
             self.active.insert(alias, ActiveQuery { state, query });
         }
@@ -159,7 +159,7 @@ impl<K, P: Paginator> PaginationState<K, P> {
 //#[derive(Clone, Debug, Eq, PartialEq)]
 struct ActiveQuery<K, P: Paginator> {
     state: PaginationState<K, P>,
-    query: P::Query,
+    query: P::Selection,
 }
 
 impl<K, P: Paginator> ActiveQuery<K, P> {

@@ -1,5 +1,5 @@
 use crate::types::Repository;
-use gqlient::{Cursor, Page, Paginator, Query, Singleton, Variable};
+use gqlient::{Cursor, Page, Paginator, QuerySelection, Singleton, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
@@ -18,7 +18,7 @@ impl GetOwnerRepos {
 
 impl Paginator for GetOwnerRepos {
     type Item = Repository;
-    type Query = GetOwnerReposQuery;
+    type Selection = GetOwnerReposQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetOwnerReposQuery {
         GetOwnerReposQuery::new(self.owner.clone(), cursor.cloned(), self.page_size)
@@ -58,7 +58,7 @@ impl GetOwnerReposQuery {
     }
 }
 
-impl Query for GetOwnerReposQuery {
+impl QuerySelection for GetOwnerReposQuery {
     type Output = Page<Repository>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
@@ -66,7 +66,7 @@ impl Query for GetOwnerReposQuery {
         self
     }
 
-    fn write_graphql<W: Write>(&self, mut s: W) -> fmt::Result {
+    fn write_selection<W: Write>(&self, mut s: W) -> fmt::Result {
         write!(
             s,
             indoc! {"

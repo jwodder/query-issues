@@ -1,4 +1,4 @@
-use gqlient::{Cursor, Id, Page, Paginator, Query, Singleton, Variable};
+use gqlient::{Cursor, Id, Page, Paginator, QuerySelection, Singleton, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
@@ -26,7 +26,7 @@ impl GetLabels {
 
 impl Paginator for GetLabels {
     type Item = String;
-    type Query = GetLabelsQuery;
+    type Selection = GetLabelsQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetLabelsQuery {
         GetLabelsQuery::new(
@@ -73,7 +73,7 @@ impl GetLabelsQuery {
     }
 }
 
-impl Query for GetLabelsQuery {
+impl QuerySelection for GetLabelsQuery {
     type Output = Page<String>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
@@ -81,7 +81,7 @@ impl Query for GetLabelsQuery {
         self
     }
 
-    fn write_graphql<W: Write>(&self, mut s: W) -> fmt::Result {
+    fn write_selection<W: Write>(&self, mut s: W) -> fmt::Result {
         write!(
             s,
             indoc! {"
