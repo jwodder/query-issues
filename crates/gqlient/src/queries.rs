@@ -32,68 +32,13 @@ pub trait QueryMachine {
     fn get_output(&mut self) -> Vec<Self::Output>;
 }
 
-pub struct BatchPaginator<K, P: Paginator> {
+// <https://users.rust-lang.org/t/125565/2>
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct BatchPaginator<K, P: Paginator<Item = Item>, Item = <P as Paginator>::Item> {
     in_progress: VecDeque<PaginationState<K, P>>,
     results: Vec<PaginationResults<K, P::Item>>,
-    active: HashMap<String, ActiveQuery<K, P>>,
+    active: HashMap<String, ActiveQuery<K, P, P::Selection>>,
     batch_size: NonZeroUsize,
-}
-
-impl<K: Clone, P: Paginator + Clone> Clone for BatchPaginator<K, P>
-where
-    P::Selection: Clone,
-    P::Item: Clone,
-{
-    fn clone(&self) -> Self {
-        BatchPaginator {
-            in_progress: self.in_progress.clone(),
-            results: self.results.clone(),
-            active: self.active.clone(),
-            batch_size: self.batch_size,
-        }
-    }
-}
-
-impl<K: fmt::Debug, P: Paginator + fmt::Debug> fmt::Debug for BatchPaginator<K, P>
-where
-    P::Selection: fmt::Debug,
-    P::Item: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("BatchPaginator")
-            .field("in_progress", &self.in_progress)
-            .field("results", &self.results)
-            .field("active", &self.active)
-            .field("batch_size", &self.batch_size)
-            .finish()
-    }
-}
-
-impl<K: PartialEq, P: Paginator + PartialEq> PartialEq for BatchPaginator<K, P>
-where
-    P::Selection: PartialEq,
-    P::Item: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        (
-            &self.in_progress,
-            &self.results,
-            &self.active,
-            self.batch_size,
-        ) == (
-            &other.in_progress,
-            &other.results,
-            &other.active,
-            other.batch_size,
-        )
-    }
-}
-
-impl<K: Eq, P: Paginator + Eq> Eq for BatchPaginator<K, P>
-where
-    P::Selection: Eq,
-    P::Item: Eq,
-{
 }
 
 impl<K, P: Paginator> BatchPaginator<K, P> {
@@ -189,10 +134,10 @@ impl<K, P: Paginator> QueryMachine for BatchPaginator<K, P> {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct PaginationState<K, P: Paginator> {
+struct PaginationState<K, P: Paginator<Item = Item>, Item = <P as Paginator>::Item> {
     key: K,
     paginator: P,
-    items: Vec<P::Item>,
+    items: Vec<Item>,
     cursor: Option<Cursor>,
     has_next_page: bool,
 }
@@ -209,52 +154,11 @@ impl<K, P: Paginator> PaginationState<K, P> {
     }
 }
 
-struct ActiveQuery<K, P: Paginator> {
-    state: PaginationState<K, P>,
-    query: P::Selection,
-}
-
-impl<K: Clone, P: Paginator + Clone> Clone for ActiveQuery<K, P>
-where
-    P::Selection: Clone,
-    P::Item: Clone,
-{
-    fn clone(&self) -> Self {
-        ActiveQuery {
-            state: self.state.clone(),
-            query: self.query.clone(),
-        }
-    }
-}
-
-impl<K: fmt::Debug, P: Paginator + fmt::Debug> fmt::Debug for ActiveQuery<K, P>
-where
-    P::Selection: fmt::Debug,
-    P::Item: fmt::Debug,
-{
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ActiveQuery")
-            .field("state", &self.state)
-            .field("query", &self.query)
-            .finish()
-    }
-}
-
-impl<K: PartialEq, P: Paginator + PartialEq> PartialEq for ActiveQuery<K, P>
-where
-    P::Selection: PartialEq,
-    P::Item: PartialEq,
-{
-    fn eq(&self, other: &Self) -> bool {
-        self.state == other.state && self.query == other.query
-    }
-}
-
-impl<K: Eq, P: Paginator + Eq> Eq for ActiveQuery<K, P>
-where
-    P::Selection: Eq,
-    P::Item: Eq,
-{
+// <https://users.rust-lang.org/t/125565/2>
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct ActiveQuery<K, P: Paginator<Selection = S>, S = <P as Paginator>::Selection> {
+    state: PaginationState<K, P, P::Item>,
+    query: S,
 }
 
 impl<K, P: Paginator> ActiveQuery<K, P> {
