@@ -5,14 +5,14 @@ use std::collections::{
     VecDeque,
     {hash_map::Entry, HashMap},
 };
-use std::fmt::Write;
+use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
 pub trait QuerySelection: Sized {
     type Output;
 
     fn with_variable_prefix(self, prefix: String) -> Self;
-    fn write_selection<W: Write>(&self, s: W) -> std::fmt::Result;
+    fn write_selection<W: Write>(&self, s: W) -> fmt::Result;
     fn variables(&self) -> impl IntoIterator<Item = (String, Variable)>;
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error>;
 }
@@ -32,12 +32,68 @@ pub trait QueryMachine {
     fn get_output(&mut self) -> Vec<Self::Output>;
 }
 
-#[allow(missing_debug_implementations)]
 pub struct BatchPaginator<K, P: Paginator> {
     in_progress: VecDeque<PaginationState<K, P>>,
     results: Vec<PaginationResults<K, P::Item>>,
     active: HashMap<String, ActiveQuery<K, P>>,
     batch_size: NonZeroUsize,
+}
+
+impl<K: Clone, P: Paginator + Clone> Clone for BatchPaginator<K, P>
+where
+    P::Selection: Clone,
+    P::Item: Clone,
+{
+    fn clone(&self) -> Self {
+        BatchPaginator {
+            in_progress: self.in_progress.clone(),
+            results: self.results.clone(),
+            active: self.active.clone(),
+            batch_size: self.batch_size,
+        }
+    }
+}
+
+impl<K: fmt::Debug, P: Paginator + fmt::Debug> fmt::Debug for BatchPaginator<K, P>
+where
+    P::Selection: fmt::Debug,
+    P::Item: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("BatchPaginator")
+            .field("in_progress", &self.in_progress)
+            .field("results", &self.results)
+            .field("active", &self.active)
+            .field("batch_size", &self.batch_size)
+            .finish()
+    }
+}
+
+impl<K: PartialEq, P: Paginator + PartialEq> PartialEq for BatchPaginator<K, P>
+where
+    P::Selection: PartialEq,
+    P::Item: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        (
+            &self.in_progress,
+            &self.results,
+            &self.active,
+            self.batch_size,
+        ) == (
+            &other.in_progress,
+            &other.results,
+            &other.active,
+            other.batch_size,
+        )
+    }
+}
+
+impl<K: Eq, P: Paginator + Eq> Eq for BatchPaginator<K, P>
+where
+    P::Selection: Eq,
+    P::Item: Eq,
+{
 }
 
 impl<K, P: Paginator> BatchPaginator<K, P> {
@@ -153,13 +209,52 @@ impl<K, P: Paginator> PaginationState<K, P> {
     }
 }
 
-// Implementing these traits requires matching bounds on P::Query, which the
-// derive macros don't handle, so the traits can only be implemented manually
-// here — but I don't need them and that's busywork, so…
-//#[derive(Clone, Debug, Eq, PartialEq)]
 struct ActiveQuery<K, P: Paginator> {
     state: PaginationState<K, P>,
     query: P::Selection,
+}
+
+impl<K: Clone, P: Paginator + Clone> Clone for ActiveQuery<K, P>
+where
+    P::Selection: Clone,
+    P::Item: Clone,
+{
+    fn clone(&self) -> Self {
+        ActiveQuery {
+            state: self.state.clone(),
+            query: self.query.clone(),
+        }
+    }
+}
+
+impl<K: fmt::Debug, P: Paginator + fmt::Debug> fmt::Debug for ActiveQuery<K, P>
+where
+    P::Selection: fmt::Debug,
+    P::Item: fmt::Debug,
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ActiveQuery")
+            .field("state", &self.state)
+            .field("query", &self.query)
+            .finish()
+    }
+}
+
+impl<K: PartialEq, P: Paginator + PartialEq> PartialEq for ActiveQuery<K, P>
+where
+    P::Selection: PartialEq,
+    P::Item: PartialEq,
+{
+    fn eq(&self, other: &Self) -> bool {
+        self.state == other.state && self.query == other.query
+    }
+}
+
+impl<K: Eq, P: Paginator + Eq> Eq for ActiveQuery<K, P>
+where
+    P::Selection: Eq,
+    P::Item: Eq,
+{
 }
 
 impl<K, P: Paginator> ActiveQuery<K, P> {
