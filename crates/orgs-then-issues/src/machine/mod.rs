@@ -101,8 +101,7 @@ impl QueryMachine for OrgsThenIssues {
         match &mut self.state {
             State::Start => self.start_fetch_repos().or_else(|| self.done()),
             State::FetchRepos { submachine, start } => {
-                let query = submachine.get_next_query();
-                if query.is_some() {
+                if let query @ Some(_) = submachine.get_next_query() {
                     query
                 } else {
                     self.results
@@ -115,8 +114,7 @@ impl QueryMachine for OrgsThenIssues {
                 }
             }
             State::FetchIssues { submachine, start } => {
-                let query = submachine.get_next_query();
-                if query.is_some() {
+                if let query @ Some(_) = submachine.get_next_query() {
                     query
                 } else {
                     self.results
@@ -128,8 +126,7 @@ impl QueryMachine for OrgsThenIssues {
                 }
             }
             State::FetchLabels { submachine, start } => {
-                let query = submachine.get_next_query();
-                if query.is_some() {
+                if let query @ Some(_) = submachine.get_next_query() {
                     query
                 } else {
                     self.results
