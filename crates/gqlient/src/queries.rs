@@ -186,8 +186,8 @@ pub struct PaginationResults<K, T> {
     pub end_cursor: Option<Cursor>,
 }
 
-impl<K, Q: Paginator> From<PaginationState<K, Q>> for PaginationResults<K, Q::Item> {
-    fn from(value: PaginationState<K, Q>) -> Self {
+impl<K, P: Paginator> From<PaginationState<K, P>> for PaginationResults<K, P::Item> {
+    fn from(value: PaginationState<K, P>) -> Self {
         PaginationResults {
             key: value.key,
             items: value.items,
