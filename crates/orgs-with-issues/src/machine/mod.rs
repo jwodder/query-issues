@@ -9,91 +9,20 @@ use std::time::{Duration, Instant};
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct OrgsWithIssues {
-    parameters: Parameters,
     state: State,
-    owners: Vec<String>,
-    results: Vec<Output>,
-    report: FetchReport,
-    issue_queries: Vec<(Id, GetIssues)>,
-    label_queries: Vec<(Id, GetLabels)>,
-    issues_needing_labels: HashMap<Id, Issue>,
+    shared: Shared,
 }
 
 impl OrgsWithIssues {
     pub(crate) fn new(owners: Vec<String>, parameters: Parameters) -> OrgsWithIssues {
         OrgsWithIssues {
-            parameters,
-            state: State::Start,
-            owners,
-            results: Vec::new(),
-            report: FetchReport::default(),
-            issue_queries: Vec::new(),
-            label_queries: Vec::new(),
-            issues_needing_labels: HashMap::new(),
+            state: State::Start(Start { owners }),
+            shared: Shared {
+                parameters,
+                results: Vec::new(),
+                report: FetchReport::default(),
+            },
         }
-    }
-
-    fn start_fetch_repos(&mut self) -> Option<(State, Option<QueryPayload>)> {
-        let mut submachine = BatchPaginator::new(
-            std::mem::take(&mut self.owners).into_iter().map(|owner| {
-                (
-                    owner.clone(),
-                    GetOwnerRepos::new(
-                        owner,
-                        self.parameters.page_size,
-                        self.parameters.label_page_size,
-                    ),
-                )
-            }),
-            self.parameters.batch_size,
-        );
-        let query = submachine.get_next_query()?;
-        self.results
-            .push(Output::Transition(Transition::StartFetchRepos));
-        let state = State::FetchRepos {
-            submachine,
-            start: Instant::now(),
-        };
-        Some((state, Some(query)))
-    }
-
-    fn start_fetch_issues(&mut self) -> Option<(State, Option<QueryPayload>)> {
-        let mut submachine = BatchPaginator::new(
-            std::mem::take(&mut self.issue_queries),
-            self.parameters.batch_size,
-        );
-        let query = submachine.get_next_query()?;
-        self.results
-            .push(Output::Transition(Transition::StartFetchIssues {
-                repos_with_extra_issues: self.report.repos_with_extra_issues,
-            }));
-        let state = State::FetchIssues {
-            submachine,
-            start: Instant::now(),
-        };
-        Some((state, Some(query)))
-    }
-
-    fn start_fetch_labels(&mut self) -> Option<(State, Option<QueryPayload>)> {
-        let mut submachine = BatchPaginator::new(
-            std::mem::take(&mut self.label_queries),
-            self.parameters.batch_size,
-        );
-        let query = submachine.get_next_query()?;
-        self.results
-            .push(Output::Transition(Transition::StartFetchLabels {
-                issues_with_extra_labels: self.report.issues_with_extra_labels,
-            }));
-        let state = State::FetchLabels {
-            submachine,
-            start: Instant::now(),
-        };
-        Some((state, Some(query)))
-    }
-
-    fn done(&mut self) -> (State, Option<QueryPayload>) {
-        self.results.push(Output::Report(self.report));
-        (State::Done, None)
     }
 }
 
@@ -102,61 +31,11 @@ impl QueryMachine for OrgsWithIssues {
 
     fn get_next_query(&mut self) -> Option<QueryPayload> {
         let (state, output) = match std::mem::replace(&mut self.state, State::Error) {
-            State::Start => self.start_fetch_repos().unwrap_or_else(|| self.done()),
-            State::FetchRepos {
-                mut submachine,
-                start,
-            } => {
-                if let query @ Some(_) = submachine.get_next_query() {
-                    (State::FetchRepos { submachine, start }, query)
-                } else {
-                    self.results
-                        .push(Output::Transition(Transition::EndFetchRepos {
-                            repositories: self.report.repositories,
-                            repos_with_open_issues: self.report.repos_with_open_issues,
-                            open_issues: self.report.open_issues,
-                            elapsed: start.elapsed(),
-                        }));
-                    self.start_fetch_issues()
-                        .unwrap_or_else(|| self.start_fetch_labels().unwrap_or_else(|| self.done()))
-                }
-            }
-            State::FetchIssues {
-                mut submachine,
-                start,
-            } => {
-                if let query @ Some(_) = submachine.get_next_query() {
-                    (State::FetchIssues { submachine, start }, query)
-                } else {
-                    self.results
-                        .push(Output::Transition(Transition::EndFetchIssues {
-                            extra_issues: self.report.extra_issues,
-                            elapsed: start.elapsed(),
-                        }));
-                    self.start_fetch_labels().unwrap_or_else(|| self.done())
-                }
-            }
-            State::FetchLabels {
-                mut submachine,
-                start,
-            } => {
-                if let query @ Some(_) = submachine.get_next_query() {
-                    (State::FetchLabels { submachine, start }, query)
-                } else {
-                    self.results
-                        .push(Output::Transition(Transition::EndFetchLabels {
-                            extra_labels: self.report.extra_labels,
-                            elapsed: start.elapsed(),
-                        }));
-                    self.results.push(Output::Issues(
-                        std::mem::take(&mut self.issues_needing_labels)
-                            .into_values()
-                            .collect(),
-                    ));
-                    self.done()
-                }
-            }
-            State::Done => (State::Done, None),
+            State::Start(start) => start.get_next_query(&mut self.shared),
+            State::FetchRepos(fetch_repos) => fetch_repos.get_next_query(&mut self.shared),
+            State::FetchIssues(fetch_issues) => fetch_issues.get_next_query(&mut self.shared),
+            State::FetchLabels(fetch_labels) => fetch_labels.get_next_query(&mut self.shared),
+            st @ State::Done(_) => (st, None),
             State::Error => panic!("get_next_query() called after machine errored"),
         };
         self.state = state;
@@ -164,98 +43,305 @@ impl QueryMachine for OrgsWithIssues {
     }
 
     fn handle_response(&mut self, data: JsonMap) -> Result<(), serde_json::Error> {
-        match &mut self.state {
-            State::Start => {
+        let r = match &mut self.state {
+            State::Start(_) => {
                 panic!("handle_response() called before get_next_query()")
             }
-            State::FetchRepos { submachine, .. } => {
-                submachine.handle_response(data)?;
-                let mut issues_out = Vec::new();
-                for repo in submachine.get_output().into_iter().flat_map(|pr| pr.items) {
-                    self.report.repositories += 1;
-                    if let Some(q) = repo.more_issues_query(
-                        self.parameters.page_size,
-                        self.parameters.label_page_size,
-                    ) {
-                        self.report.repos_with_extra_issues += 1;
-                        self.issue_queries.push(q);
-                    }
-                    if !repo.issues.is_empty() {
-                        self.report.repos_with_open_issues += 1;
-                        for iwl in repo.issues {
-                            self.report.open_issues += 1;
-                            if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size)
-                            {
-                                self.report.issues_with_extra_labels += 1;
-                                self.label_queries.push(q);
-                                self.issues_needing_labels.insert(iwl.issue_id, iwl.issue);
-                            } else {
-                                issues_out.push(iwl.issue);
-                            }
-                        }
-                    }
-                }
-                if !issues_out.is_empty() {
-                    self.results.push(Output::Issues(issues_out));
-                }
+            State::FetchRepos(ref mut state) => state.handle_response(data, &mut self.shared),
+            State::FetchIssues(ref mut state) => state.handle_response(data, &mut self.shared),
+            State::FetchLabels(ref mut state) => state.handle_response(data, &mut self.shared),
+            State::Done(_) => panic!("handle_response() called after machine completed"),
+            State::Error => panic!("handle_response() called after machine errored"),
+        };
+        if r.is_err() {
+            self.state = State::Error;
+        }
+        r
+    }
+
+    fn get_output(&mut self) -> Vec<Self::Output> {
+        self.shared.results.drain(..).collect()
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Shared {
+    parameters: Parameters,
+    results: Vec<Output>,
+    report: FetchReport,
+}
+
+impl Shared {
+    fn transition(&mut self, t: Transition) {
+        self.results.push(Output::Transition(t));
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+enum State {
+    Start(Start),
+    FetchRepos(FetchRepos),
+    FetchIssues(FetchIssues),
+    FetchLabels(FetchLabels),
+    Done(Done),
+    Error,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Start {
+    owners: Vec<String>,
+}
+
+impl Start {
+    fn get_next_query(self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+        FetchRepos::start(self.owners, shared)
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FetchRepos {
+    submachine: BatchPaginator<String, GetOwnerRepos>,
+    start: Instant,
+    issue_queries: Vec<(Id, GetIssues)>,
+    label_queries: Vec<(Id, GetLabels)>,
+    issues_needing_labels: HashMap<Id, Issue>,
+}
+
+impl FetchRepos {
+    fn start(owners: Vec<String>, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+        let mut submachine = BatchPaginator::new(
+            owners.into_iter().map(|owner| {
+                (
+                    owner.clone(),
+                    GetOwnerRepos::new(
+                        owner,
+                        shared.parameters.page_size,
+                        shared.parameters.label_page_size,
+                    ),
+                )
+            }),
+            shared.parameters.batch_size,
+        );
+        if let query @ Some(_) = submachine.get_next_query() {
+            shared.transition(Transition::StartFetchRepos);
+            let state = State::FetchRepos(FetchRepos {
+                submachine,
+                start: Instant::now(),
+                issue_queries: Vec::new(),
+                label_queries: Vec::new(),
+                issues_needing_labels: HashMap::new(),
+            });
+            (state, query)
+        } else {
+            Done::start(shared)
+        }
+    }
+
+    fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+        if let query @ Some(_) = self.submachine.get_next_query() {
+            (State::FetchRepos(self), query)
+        } else {
+            shared.transition(Transition::EndFetchRepos {
+                repositories: shared.report.repositories,
+                repos_with_open_issues: shared.report.repos_with_open_issues,
+                open_issues: shared.report.open_issues,
+                elapsed: self.start.elapsed(),
+            });
+            FetchIssues::start(
+                self.issue_queries,
+                self.label_queries,
+                self.issues_needing_labels,
+                shared,
+            )
+        }
+    }
+
+    fn handle_response(
+        &mut self,
+        data: JsonMap,
+        shared: &mut Shared,
+    ) -> Result<(), serde_json::Error> {
+        self.submachine.handle_response(data)?;
+        let mut issues_out = Vec::new();
+        for repo in self
+            .submachine
+            .get_output()
+            .into_iter()
+            .flat_map(|pr| pr.items)
+        {
+            shared.report.repositories += 1;
+            if let Some(q) = repo.more_issues_query(
+                shared.parameters.page_size,
+                shared.parameters.label_page_size,
+            ) {
+                shared.report.repos_with_extra_issues += 1;
+                self.issue_queries.push(q);
             }
-            State::FetchIssues { submachine, .. } => {
-                submachine.handle_response(data)?;
-                let mut issues_out = Vec::new();
-                for iwl in submachine.get_output().into_iter().flat_map(|pr| pr.items) {
-                    self.report.open_issues += 1;
-                    self.report.extra_issues += 1;
-                    if let Some(q) = iwl.more_labels_query(self.parameters.label_page_size) {
-                        self.report.issues_with_extra_labels += 1;
+            if !repo.issues.is_empty() {
+                shared.report.repos_with_open_issues += 1;
+                for iwl in repo.issues {
+                    shared.report.open_issues += 1;
+                    if let Some(q) = iwl.more_labels_query(shared.parameters.label_page_size) {
+                        shared.report.issues_with_extra_labels += 1;
                         self.label_queries.push(q);
                         self.issues_needing_labels.insert(iwl.issue_id, iwl.issue);
                     } else {
                         issues_out.push(iwl.issue);
                     }
                 }
-                if !issues_out.is_empty() {
-                    self.results.push(Output::Issues(issues_out));
-                }
             }
-            State::FetchLabels { submachine, .. } => {
-                submachine.handle_response(data)?;
-                for res in submachine.get_output() {
-                    self.report.extra_labels += res.items.len();
-                    self.issues_needing_labels
-                        .get_mut(&res.key)
-                        .expect("Issues we get labels for should have already been seen")
-                        .labels
-                        .extend(res.items);
-                }
-            }
-            State::Done => (),
-            State::Error => panic!("handle_response() called after machine errored"),
+        }
+        if !issues_out.is_empty() {
+            shared.results.push(Output::Issues(issues_out));
         }
         Ok(())
-    }
-
-    fn get_output(&mut self) -> Vec<Self::Output> {
-        self.results.drain(..).collect()
     }
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
-enum State {
-    Start,
-    FetchRepos {
-        submachine: BatchPaginator<String, GetOwnerRepos>,
-        start: Instant,
-    },
-    FetchIssues {
-        submachine: BatchPaginator<Id, GetIssues>,
-        start: Instant,
-    },
-    FetchLabels {
-        submachine: BatchPaginator<Id, GetLabels>,
-        start: Instant,
-    },
-    Done,
-    Error,
+struct FetchIssues {
+    submachine: BatchPaginator<Id, GetIssues>,
+    start: Instant,
+    label_queries: Vec<(Id, GetLabels)>,
+    issues_needing_labels: HashMap<Id, Issue>,
+}
+
+impl FetchIssues {
+    fn start(
+        issue_queries: Vec<(Id, GetIssues)>,
+        label_queries: Vec<(Id, GetLabels)>,
+        issues_needing_labels: HashMap<Id, Issue>,
+        shared: &mut Shared,
+    ) -> (State, Option<QueryPayload>) {
+        let mut submachine = BatchPaginator::new(issue_queries, shared.parameters.batch_size);
+        if let query @ Some(_) = submachine.get_next_query() {
+            shared.transition(Transition::StartFetchIssues {
+                repos_with_extra_issues: shared.report.repos_with_extra_issues,
+            });
+            let state = State::FetchIssues(FetchIssues {
+                submachine,
+                start: Instant::now(),
+                label_queries,
+                issues_needing_labels,
+            });
+            (state, query)
+        } else {
+            FetchLabels::start(label_queries, issues_needing_labels, shared)
+        }
+    }
+
+    fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+        if let query @ Some(_) = self.submachine.get_next_query() {
+            (State::FetchIssues(self), query)
+        } else {
+            shared.transition(Transition::EndFetchIssues {
+                extra_issues: shared.report.extra_issues,
+                elapsed: self.start.elapsed(),
+            });
+            FetchLabels::start(self.label_queries, self.issues_needing_labels, shared)
+        }
+    }
+
+    fn handle_response(
+        &mut self,
+        data: JsonMap,
+        shared: &mut Shared,
+    ) -> Result<(), serde_json::Error> {
+        self.submachine.handle_response(data)?;
+        let mut issues_out = Vec::new();
+        for iwl in self
+            .submachine
+            .get_output()
+            .into_iter()
+            .flat_map(|pr| pr.items)
+        {
+            shared.report.open_issues += 1;
+            shared.report.extra_issues += 1;
+            if let Some(q) = iwl.more_labels_query(shared.parameters.label_page_size) {
+                shared.report.issues_with_extra_labels += 1;
+                self.label_queries.push(q);
+                self.issues_needing_labels.insert(iwl.issue_id, iwl.issue);
+            } else {
+                issues_out.push(iwl.issue);
+            }
+        }
+        if !issues_out.is_empty() {
+            shared.results.push(Output::Issues(issues_out));
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct FetchLabels {
+    submachine: BatchPaginator<Id, GetLabels>,
+    start: Instant,
+    issues_needing_labels: HashMap<Id, Issue>,
+}
+
+impl FetchLabels {
+    fn start(
+        label_queries: Vec<(Id, GetLabels)>,
+        issues_needing_labels: HashMap<Id, Issue>,
+        shared: &mut Shared,
+    ) -> (State, Option<QueryPayload>) {
+        let mut submachine = BatchPaginator::new(label_queries, shared.parameters.batch_size);
+        if let query @ Some(_) = submachine.get_next_query() {
+            shared.transition(Transition::StartFetchLabels {
+                issues_with_extra_labels: shared.report.issues_with_extra_labels,
+            });
+            let state = State::FetchLabels(FetchLabels {
+                submachine,
+                start: Instant::now(),
+                issues_needing_labels,
+            });
+            (state, query)
+        } else {
+            Done::start(shared)
+        }
+    }
+
+    fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+        if let query @ Some(_) = self.submachine.get_next_query() {
+            (State::FetchLabels(self), query)
+        } else {
+            shared.transition(Transition::EndFetchLabels {
+                extra_labels: shared.report.extra_labels,
+                elapsed: self.start.elapsed(),
+            });
+            shared.results.push(Output::Issues(
+                self.issues_needing_labels.into_values().collect(),
+            ));
+            Done::start(shared)
+        }
+    }
+
+    fn handle_response(
+        &mut self,
+        data: JsonMap,
+        shared: &mut Shared,
+    ) -> Result<(), serde_json::Error> {
+        self.submachine.handle_response(data)?;
+        for res in self.submachine.get_output() {
+            shared.report.extra_labels += res.items.len();
+            self.issues_needing_labels
+                .get_mut(&res.key)
+                .expect("Issues we get labels for should have already been seen")
+                .labels
+                .extend(res.items);
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Done;
+
+impl Done {
+    fn start(shared: &mut Shared) -> (State, Option<QueryPayload>) {
+        shared.results.push(Output::Report(shared.report));
+        (State::Done(Done), None)
+    }
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize)]
