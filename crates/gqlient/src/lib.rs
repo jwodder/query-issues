@@ -89,13 +89,13 @@ impl Client {
             .map_err(Into::into)
     }
 
-    pub fn run<Q: QueryMachine>(&self, query: Q) -> QueryResults<'_, Q> {
-        QueryResults::new(self, query)
+    pub fn run<Q: QueryMachine>(&self, query: Q) -> MachineRunner<'_, Q> {
+        MachineRunner::new(self, query)
     }
 }
 
 #[derive(Debug)]
-pub struct QueryResults<'a, Q: QueryMachine> {
+pub struct MachineRunner<'a, Q: QueryMachine> {
     client: &'a Client,
     query: Q,
     query_done: bool,
@@ -103,9 +103,9 @@ pub struct QueryResults<'a, Q: QueryMachine> {
     payload: Option<QueryPayload>,
 }
 
-impl<'a, Q: QueryMachine> QueryResults<'a, Q> {
+impl<'a, Q: QueryMachine> MachineRunner<'a, Q> {
     fn new(client: &'a Client, query: Q) -> Self {
-        QueryResults {
+        MachineRunner {
             client,
             query,
             query_done: false,
@@ -115,7 +115,7 @@ impl<'a, Q: QueryMachine> QueryResults<'a, Q> {
     }
 }
 
-impl<Q: QueryMachine> Iterator for QueryResults<'_, Q> {
+impl<Q: QueryMachine> Iterator for MachineRunner<'_, Q> {
     type Item = Result<Q::Output, QueryError>;
 
     fn next(&mut self) -> Option<Self::Item> {
