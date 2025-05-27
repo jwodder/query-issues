@@ -33,7 +33,7 @@ impl OrgsWithIssues {
         }
     }
 
-    fn start_fetch_repos(&mut self) -> Option<QueryPayload> {
+    fn start_fetch_repos(&mut self) -> Option<(State, Option<QueryPayload>)> {
         let mut submachine = BatchPaginator::new(
             std::mem::take(&mut self.owners).into_iter().map(|owner| {
                 (
@@ -50,14 +50,14 @@ impl OrgsWithIssues {
         let query = submachine.get_next_query()?;
         self.results
             .push(Output::Transition(Transition::StartFetchRepos));
-        self.state = State::FetchRepos {
+        let state = State::FetchRepos {
             submachine,
             start: Instant::now(),
         };
-        Some(query)
+        Some((state, Some(query)))
     }
 
-    fn start_fetch_issues(&mut self) -> Option<QueryPayload> {
+    fn start_fetch_issues(&mut self) -> Option<(State, Option<QueryPayload>)> {
         let mut submachine = BatchPaginator::new(
             std::mem::take(&mut self.issue_queries),
             self.parameters.batch_size,
@@ -67,14 +67,14 @@ impl OrgsWithIssues {
             .push(Output::Transition(Transition::StartFetchIssues {
                 repos_with_extra_issues: self.report.repos_with_extra_issues,
             }));
-        self.state = State::FetchIssues {
+        let state = State::FetchIssues {
             submachine,
             start: Instant::now(),
         };
-        Some(query)
+        Some((state, Some(query)))
     }
 
-    fn start_fetch_labels(&mut self) -> Option<QueryPayload> {
+    fn start_fetch_labels(&mut self) -> Option<(State, Option<QueryPayload>)> {
         let mut submachine = BatchPaginator::new(
             std::mem::take(&mut self.label_queries),
             self.parameters.batch_size,
@@ -84,17 +84,16 @@ impl OrgsWithIssues {
             .push(Output::Transition(Transition::StartFetchLabels {
                 issues_with_extra_labels: self.report.issues_with_extra_labels,
             }));
-        self.state = State::FetchLabels {
+        let state = State::FetchLabels {
             submachine,
             start: Instant::now(),
         };
-        Some(query)
+        Some((state, Some(query)))
     }
 
-    fn done(&mut self) -> Option<QueryPayload> {
+    fn done(&mut self) -> (State, Option<QueryPayload>) {
         self.results.push(Output::Report(self.report));
-        self.state = State::Done;
-        None
+        (State::Done, None)
     }
 }
 
@@ -102,11 +101,14 @@ impl QueryMachine for OrgsWithIssues {
     type Output = Output;
 
     fn get_next_query(&mut self) -> Option<QueryPayload> {
-        match &mut self.state {
-            State::Start => self.start_fetch_repos().or_else(|| self.done()),
-            State::FetchRepos { submachine, start } => {
+        let (state, output) = match std::mem::replace(&mut self.state, State::Error) {
+            State::Start => self.start_fetch_repos().unwrap_or_else(|| self.done()),
+            State::FetchRepos {
+                mut submachine,
+                start,
+            } => {
                 if let query @ Some(_) = submachine.get_next_query() {
-                    query
+                    (State::FetchRepos { submachine, start }, query)
                 } else {
                     self.results
                         .push(Output::Transition(Transition::EndFetchRepos {
@@ -116,25 +118,30 @@ impl QueryMachine for OrgsWithIssues {
                             elapsed: start.elapsed(),
                         }));
                     self.start_fetch_issues()
-                        .or_else(|| self.start_fetch_labels())
-                        .or_else(|| self.done())
+                        .unwrap_or_else(|| self.start_fetch_labels().unwrap_or_else(|| self.done()))
                 }
             }
-            State::FetchIssues { submachine, start } => {
+            State::FetchIssues {
+                mut submachine,
+                start,
+            } => {
                 if let query @ Some(_) = submachine.get_next_query() {
-                    query
+                    (State::FetchIssues { submachine, start }, query)
                 } else {
                     self.results
                         .push(Output::Transition(Transition::EndFetchIssues {
                             extra_issues: self.report.extra_issues,
                             elapsed: start.elapsed(),
                         }));
-                    self.start_fetch_labels().or_else(|| self.done())
+                    self.start_fetch_labels().unwrap_or_else(|| self.done())
                 }
             }
-            State::FetchLabels { submachine, start } => {
+            State::FetchLabels {
+                mut submachine,
+                start,
+            } => {
                 if let query @ Some(_) = submachine.get_next_query() {
-                    query
+                    (State::FetchLabels { submachine, start }, query)
                 } else {
                     self.results
                         .push(Output::Transition(Transition::EndFetchLabels {
@@ -149,8 +156,11 @@ impl QueryMachine for OrgsWithIssues {
                     self.done()
                 }
             }
-            State::Done => None,
-        }
+            State::Done => (State::Done, None),
+            State::Error => panic!("get_next_query() called after machine errored"),
+        };
+        self.state = state;
+        output
     }
 
     fn handle_response(&mut self, data: JsonMap) -> Result<(), serde_json::Error> {
@@ -219,6 +229,7 @@ impl QueryMachine for OrgsWithIssues {
                 }
             }
             State::Done => (),
+            State::Error => panic!("handle_response() called after machine errored"),
         }
         Ok(())
     }
@@ -244,6 +255,7 @@ enum State {
         start: Instant,
     },
     Done,
+    Error,
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize)]
