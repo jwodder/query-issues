@@ -12,6 +12,7 @@ publish.workspace = true
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+enum_dispatch = "0.3.13"
 gqlient = { path = "../gqlient" }
 humantime.workspace = true
 indoc.workspace = true

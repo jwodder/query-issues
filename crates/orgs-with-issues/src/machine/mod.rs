@@ -16,7 +16,7 @@ pub(crate) struct OrgsWithIssues {
 impl OrgsWithIssues {
     pub(crate) fn new(owners: Vec<String>, parameters: Parameters) -> OrgsWithIssues {
         OrgsWithIssues {
-            state: State::Start(Start { owners }),
+            state: Start { owners }.into(),
             shared: Shared {
                 parameters,
                 results: Vec::new(),
@@ -30,31 +30,16 @@ impl QueryMachine for OrgsWithIssues {
     type Output = Output;
 
     fn get_next_query(&mut self) -> Option<QueryPayload> {
-        let (state, output) = match std::mem::replace(&mut self.state, State::Error) {
-            State::Start(start) => start.get_next_query(&mut self.shared),
-            State::FetchRepos(fetch_repos) => fetch_repos.get_next_query(&mut self.shared),
-            State::FetchIssues(fetch_issues) => fetch_issues.get_next_query(&mut self.shared),
-            State::FetchLabels(fetch_labels) => fetch_labels.get_next_query(&mut self.shared),
-            st @ State::Done(_) => (st, None),
-            State::Error => panic!("get_next_query() called after machine errored"),
-        };
+        let (state, output) =
+            std::mem::replace(&mut self.state, Error.into()).get_next_query(&mut self.shared);
         self.state = state;
         output
     }
 
     fn handle_response(&mut self, data: JsonMap) -> Result<(), serde_json::Error> {
-        let r = match &mut self.state {
-            State::Start(_) => {
-                panic!("handle_response() called before get_next_query()")
-            }
-            State::FetchRepos(ref mut state) => state.handle_response(data, &mut self.shared),
-            State::FetchIssues(ref mut state) => state.handle_response(data, &mut self.shared),
-            State::FetchLabels(ref mut state) => state.handle_response(data, &mut self.shared),
-            State::Done(_) => panic!("handle_response() called after machine completed"),
-            State::Error => panic!("handle_response() called after machine errored"),
-        };
+        let r = self.state.handle_response(data, &mut self.shared);
         if r.is_err() {
-            self.state = State::Error;
+            self.state = Error.into();
         }
         r
     }
@@ -77,13 +62,24 @@ impl Shared {
     }
 }
 
+#[enum_dispatch::enum_dispatch]
+trait MachineState {
+    fn get_next_query(self, shared: &mut Shared) -> (State, Option<QueryPayload>);
+    fn handle_response(
+        &mut self,
+        data: JsonMap,
+        shared: &mut Shared,
+    ) -> Result<(), serde_json::Error>;
+}
+
+#[enum_dispatch::enum_dispatch(MachineState)]
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum State {
-    Start(Start),
-    FetchRepos(FetchRepos),
-    FetchIssues(FetchIssues),
-    FetchLabels(FetchLabels),
-    Done(Done),
+    Start,
+    FetchRepos,
+    FetchIssues,
+    FetchLabels,
+    Done,
     Error,
 }
 
@@ -92,9 +88,17 @@ struct Start {
     owners: Vec<String>,
 }
 
-impl Start {
+impl MachineState for Start {
     fn get_next_query(self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
         FetchRepos::start(self.owners, shared)
+    }
+
+    fn handle_response(
+        &mut self,
+        _data: JsonMap,
+        _shared: &mut Shared,
+    ) -> Result<(), serde_json::Error> {
+        panic!("handle_response() called before get_next_query()")
     }
 }
 
@@ -124,22 +128,25 @@ impl FetchRepos {
         );
         if let query @ Some(_) = submachine.get_next_query() {
             shared.transition(Transition::StartFetchRepos);
-            let state = State::FetchRepos(FetchRepos {
+            let state = FetchRepos {
                 submachine,
                 start: Instant::now(),
                 issue_queries: Vec::new(),
                 label_queries: Vec::new(),
                 issues_needing_labels: HashMap::new(),
-            });
+            }
+            .into();
             (state, query)
         } else {
             Done::start(shared)
         }
     }
+}
 
+impl MachineState for FetchRepos {
     fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
         if let query @ Some(_) = self.submachine.get_next_query() {
-            (State::FetchRepos(self), query)
+            (self.into(), query)
         } else {
             shared.transition(Transition::EndFetchRepos {
                 repositories: shared.report.repositories,
@@ -218,21 +225,24 @@ impl FetchIssues {
             shared.transition(Transition::StartFetchIssues {
                 repos_with_extra_issues: shared.report.repos_with_extra_issues,
             });
-            let state = State::FetchIssues(FetchIssues {
+            let state = FetchIssues {
                 submachine,
                 start: Instant::now(),
                 label_queries,
                 issues_needing_labels,
-            });
+            }
+            .into();
             (state, query)
         } else {
             FetchLabels::start(label_queries, issues_needing_labels, shared)
         }
     }
+}
 
+impl MachineState for FetchIssues {
     fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
         if let query @ Some(_) = self.submachine.get_next_query() {
-            (State::FetchIssues(self), query)
+            (self.into(), query)
         } else {
             shared.transition(Transition::EndFetchIssues {
                 extra_issues: shared.report.extra_issues,
@@ -290,20 +300,23 @@ impl FetchLabels {
             shared.transition(Transition::StartFetchLabels {
                 issues_with_extra_labels: shared.report.issues_with_extra_labels,
             });
-            let state = State::FetchLabels(FetchLabels {
+            let state = FetchLabels {
                 submachine,
                 start: Instant::now(),
                 issues_needing_labels,
-            });
+            }
+            .into();
             (state, query)
         } else {
             Done::start(shared)
         }
     }
+}
 
+impl MachineState for FetchLabels {
     fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
         if let query @ Some(_) = self.submachine.get_next_query() {
-            (State::FetchLabels(self), query)
+            (self.into(), query)
         } else {
             shared.transition(Transition::EndFetchLabels {
                 extra_labels: shared.report.extra_labels,
@@ -340,7 +353,38 @@ struct Done;
 impl Done {
     fn start(shared: &mut Shared) -> (State, Option<QueryPayload>) {
         shared.results.push(Output::Report(shared.report));
-        (State::Done(Done), None)
+        (Done.into(), None)
+    }
+}
+
+impl MachineState for Done {
+    fn get_next_query(self, _shared: &mut Shared) -> (State, Option<QueryPayload>) {
+        (self.into(), None)
+    }
+
+    fn handle_response(
+        &mut self,
+        _data: JsonMap,
+        _shared: &mut Shared,
+    ) -> Result<(), serde_json::Error> {
+        panic!("handle_response() called after machine completed")
+    }
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct Error;
+
+impl MachineState for Error {
+    fn get_next_query(self, _shared: &mut Shared) -> (State, Option<QueryPayload>) {
+        panic!("get_next_query() called after machine errored")
+    }
+
+    fn handle_response(
+        &mut self,
+        _data: JsonMap,
+        _shared: &mut Shared,
+    ) -> Result<(), serde_json::Error> {
+        panic!("handle_response() called after machine errored")
     }
 }
 
