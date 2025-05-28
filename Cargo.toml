@@ -13,6 +13,7 @@ publish = false
 [workspace.dependencies]
 anyhow = "1.0.82"
 clap = { version = "4.5.4", default-features = false, features = ["derive", "error-context", "help", "std", "suggestions", "usage", "wrap_help"] }
+enum_dispatch = "0.3.13"
 humantime = "2.1.0"
 indoc = "2.0.5"
 patharg = "0.4.0"

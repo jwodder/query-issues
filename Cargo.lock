@@ -548,6 +548,7 @@ dependencies = [
  "anyhow",
  "assert_matches",
  "clap",
+ "enum_dispatch",
  "gqlient",
  "humantime",
  "indoc",

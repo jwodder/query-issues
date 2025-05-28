@@ -65,6 +65,7 @@ impl Shared {
 #[enum_dispatch::enum_dispatch]
 trait MachineState {
     fn get_next_query(self, shared: &mut Shared) -> (State, Option<QueryPayload>);
+
     fn handle_response(
         &mut self,
         data: JsonMap,
