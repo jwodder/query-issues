@@ -1,6 +1,8 @@
 #!/bin/bash
 set -ex
 
+cd "$(dirname "$0")"
+
 commands=(orgs-then-issues orgs-with-issues)
 orgs=(jwodder wheelodex)
 
