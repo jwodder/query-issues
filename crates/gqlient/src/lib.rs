@@ -16,9 +16,14 @@ use ureq::{
     Agent, SendBody,
 };
 
+/// The URL to which GitHub GraphQL queries are sent
 static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
+
+/// The URL to which GitHub REST API requests for rate limit information are
+/// sent
 static RATE_LIMIT_URL: &str = "https://api.github.com/rate_limit";
 
+/// The [`Client`]'s "User-Agent" header value
 static USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
@@ -28,14 +33,17 @@ static USER_AGENT: &str = concat!(
     ")",
 );
 
+/// The default batch size for use by [`BatchPaginator`]s
 pub const DEFAULT_BATCH_SIZE: NonZeroUsize = NonZeroUsize::new(50).unwrap();
 
+/// A client for performing requests to the GitHub GraphQL API
 #[derive(Clone, Debug)]
 pub struct Client {
     inner: Agent,
 }
 
 impl Client {
+    /// Create a new client instance using the given GitHub access token
     pub fn new(token: &str) -> Result<Client, BuildClientError> {
         let auth = HeaderValue::from_str(&format!("Bearer {token}"))?;
         let inner = Agent::config_builder()
@@ -55,11 +63,15 @@ impl Client {
         Ok(Client { inner })
     }
 
+    /// Fetch the local user's GitHub access token with [`gh_token`] and use it
+    /// to create a new client instance
     pub fn new_with_local_token() -> Result<Client, BuildClientError> {
         let token = gh_token::get()?;
         Client::new(&token)
     }
 
+    /// Get the current details on the GraphQL API rate limit for the
+    /// authenticated user
     pub fn get_rate_limit(&self) -> Result<RateLimit, RateLimitError> {
         let bytes = self
             .inner
@@ -73,6 +85,8 @@ impl Client {
         Ok(r.resources.graphql)
     }
 
+    /// Perform a GraphQL query and return its deserialized response data on
+    /// success
     pub fn query(&self, payload: QueryPayload) -> Result<JsonMap, QueryError> {
         let bytes = self
             .inner
@@ -87,17 +101,31 @@ impl Client {
             .map_err(Into::into)
     }
 
+    /// Return an iterator over the results of running a [`QueryMachine`] to
+    /// completion
     pub fn run<Q: QueryMachine>(&self, query: Q) -> MachineRunner<'_, Q> {
         MachineRunner::new(self, query)
     }
 }
 
+/// An iterator that runs a [`QueryMachine`] to completion against a [`Client`]
+/// and yields the outputs
 #[derive(Debug)]
 pub struct MachineRunner<'a, Q: QueryMachine> {
     client: &'a Client,
+
+    /// The `QueryMachine`
     query: Q,
+
+    /// Has the `QueryMachine` terminated?
     query_done: bool,
+
+    /// Any values returned by [`QueryMachine::get_output()`] that have yet to
+    /// be yielded by the iterator
     yielding: VecDeque<Q::Output>,
+
+    /// A `QueryPayload` returned by [`QueryMachine::get_next_query()`] to send
+    /// to the client in the next request
     payload: Option<QueryPayload>,
 }
 
@@ -129,7 +157,10 @@ impl<Q: QueryMachine> Iterator for MachineRunner<'_, Q> {
                             return Some(Err(e.into()));
                         }
                     }
-                    Err(e) => return Some(Err(e)),
+                    Err(e) => {
+                        self.query_done = true;
+                        return Some(Err(e));
+                    }
                 }
                 self.yielding.extend(self.query.get_output());
             } else {
@@ -174,47 +205,71 @@ pub enum QueryError {
     GraphQL(#[from] GqlError),
 }
 
+/// Structure returned for requests to [`RATE_LIMIT_URL`]
 // This can't be replaced with Singleton because the JSON contains more than
 // one field.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct RateLimitResponse {
+    /// Rate limit details for different API resources
     resources: RateLimitResources,
 }
 
+/// Rate limit details for different API resources
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct RateLimitResources {
+    /// The rate limit details for the GraphQL API
     graphql: RateLimit,
 }
 
+/// Information on the rate limit points for a given resource
 #[derive(Copy, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct RateLimit {
+    /// The number of rate limit points used for the resource since the last
+    /// reset
     used: u32,
+
+    /// The UNIX timestamp at which the rate limit points for the resource will
+    /// next reset
     reset: u64,
 }
 
 impl RateLimit {
-    // Returns `None` if a reset happened in between the fetching of the two
-    // rate limit values
+    /// Returns the number of rate limit points used since a previous
+    /// `RateLimit` instance was fetched.
+    ///
+    /// Returns `None` if a reset happened in between the fetching of the two
+    /// `RateLimit` values.
     pub fn used_since(self, since: RateLimit) -> Option<u32> {
         (self.reset == since.reset).then(|| self.used.saturating_sub(since.used))
     }
 }
 
+/// A complete GraphQL query to send to the GitHub GraphQL API
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct QueryPayload {
+    /// A complete GraphQL query string
     pub query: String,
+
+    /// A collection of variables used by `query` as a map from variable names
+    /// to values
     pub variables: JsonMap,
 }
 
+/// A deserialized complete response to a GraphQL query
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct Response {
+    /// The data requested by the query
     #[serde(default)]
     data: JsonMap,
+
+    /// Any errors reported by the server for the query
     #[serde(default)]
     errors: GqlError,
 }
 
 impl Response {
+    /// If `errors` is empty, return `Ok(data)`; otherwise, return
+    /// `Err(errors)`
     fn into_data(self) -> Result<JsonMap, GqlError> {
         if self.errors.is_empty() {
             Ok(self.data)
@@ -224,6 +279,7 @@ impl Response {
     }
 }
 
+/// A collection of errors returned for a GraphQL query
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq)]
 #[serde(transparent)]
 pub struct GqlError(Vec<GqlInnerError>);
@@ -256,6 +312,7 @@ impl fmt::Display for GqlError {
 
 impl std::error::Error for GqlError {}
 
+/// An individual GraphQL query error
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 struct GqlInnerError {
     #[serde(default, rename = "type")]
