@@ -28,9 +28,7 @@ static USER_AGENT: &str = concat!(
     ")",
 );
 
-#[allow(unsafe_code)]
-// SAFETY: 50 != 0
-pub const DEFAULT_BATCH_SIZE: NonZeroUsize = unsafe { NonZeroUsize::new_unchecked(50) };
+pub const DEFAULT_BATCH_SIZE: NonZeroUsize = NonZeroUsize::new(50).unwrap();
 
 #[derive(Clone, Debug)]
 pub struct Client {
