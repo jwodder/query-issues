@@ -6,7 +6,7 @@ use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
 /// A [`Paginator`] for retrieving open issues from a given GitHub repository
-/// as pages of [`IssueWithLabels`]
+/// as pages of [`IssueWithLabels`] values
 ///
 /// For each issue, only the first page of labels is retrieved; any additional
 /// labels must be queried via [`GetLabels`].

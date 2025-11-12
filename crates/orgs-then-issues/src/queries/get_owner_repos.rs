@@ -5,9 +5,16 @@ use serde::Deserialize;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
+/// A [`Paginator`] for retrieving public, non-archived, non-fork repositories
+/// belonging to a given GitHub repository owner as pages of [`Repository`]
+/// values
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetOwnerRepos {
+    /// The repository owner (user or organization) for which to retrieve
+    /// repositories
     owner: String,
+
+    /// How many repositories to request per page
     page_size: NonZeroUsize,
 }
 
@@ -26,11 +33,22 @@ impl Paginator for GetOwnerRepos {
     }
 }
 
+/// A [`QueryField`] for retrieving a page of repositories (as [`Repository`]
+/// values) belonging to a given GitHub repository owner starting at a given
+/// cursor
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetOwnerReposQuery {
+    /// The repository owner (user or organization) for which to retrieve
+    /// repositories
     owner: String,
+
+    /// The pagination cursor after which to retrieve repositories
     cursor: Option<Cursor>,
+
+    /// How many repositories to request per page
     page_size: NonZeroUsize,
+
+    /// The prefix to prepend to the variable names, if any
     prefix: Option<String>,
 }
 
@@ -44,6 +62,8 @@ impl GetOwnerReposQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the
+    /// repository owner, including any added prefixes
     fn owner_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_owner"),
@@ -51,6 +71,8 @@ impl GetOwnerReposQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the
+    /// repository cursor, including any added prefixes
     fn cursor_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_cursor"),
