@@ -8,12 +8,12 @@ use std::fmt;
 use std::num::NonZeroUsize;
 use thiserror::Error;
 use ureq::{
+    Agent, SendBody,
     http::{
-        header::{HeaderValue, InvalidHeaderValue},
         Request,
+        header::{HeaderValue, InvalidHeaderValue},
     },
     middleware::MiddlewareNext,
-    Agent, SendBody,
 };
 
 /// The URL to which GitHub GraphQL queries are sent

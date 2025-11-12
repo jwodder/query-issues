@@ -6,7 +6,7 @@ use anyhow::Context;
 use clap::Parser;
 use gqlient::{Client, DEFAULT_BATCH_SIZE};
 use serde::Serialize;
-use serde_jsonlines::{append_json_lines, WriteExt};
+use serde_jsonlines::{WriteExt, append_json_lines};
 use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
