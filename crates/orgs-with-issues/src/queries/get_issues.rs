@@ -4,11 +4,23 @@ use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
+/// A [`Paginator`] for retrieving open issues from a given GitHub repository
+/// as pages of [`IssueWithLabels`] values
+///
+/// For each issue, only the first page of labels is retrieved; any additional
+/// labels must be queried via `GetLabels`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetIssues {
+    /// The GraphQL node ID of the repository for which to retrieve open issues
     repo_id: Id,
+
+    /// The pagination cursor after which to retrieve issues
     cursor: Option<Cursor>,
+
+    /// How many issues to request per page
     page_size: NonZeroUsize,
+
+    /// How many issue labels to request per page
     label_page_size: NonZeroUsize,
 }
 
@@ -45,12 +57,27 @@ impl Paginator for GetIssues {
     }
 }
 
+/// A [`QueryField`] for retrieving a page of open issues (as
+/// [`IssueWithLabels`] values) from a given GitHub repository starting at a
+/// given cursor
+///
+/// For each issue, only the first page of labels is retrieved; any additional
+/// labels must be queried via `GetLabels`.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetIssuesQuery {
+    /// The GraphQL node ID of the repository for which to retrieve open issues
     repo_id: Id,
+
+    /// The pagination cursor after which to retrieve issues
     cursor: Option<Cursor>,
+
+    /// How many issues to request per page
     page_size: NonZeroUsize,
+
+    /// How many issue labels to request per page
     label_page_size: NonZeroUsize,
+
+    /// The prefix to prepend to the variable names, if any
     prefix: Option<String>,
 }
 
@@ -70,6 +97,8 @@ impl GetIssuesQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the
+    /// repository ID, including any added prefixes
     fn repo_id_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_repo_id"),
@@ -77,6 +106,8 @@ impl GetIssuesQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the issue
+    /// cursor, including any added prefixes
     fn cursor_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_cursor"),

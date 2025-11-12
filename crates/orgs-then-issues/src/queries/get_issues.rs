@@ -236,6 +236,26 @@ pub(crate) struct IssueWithLabels {
     pub(crate) has_more_labels: bool,
 }
 
+impl IssueWithLabels {
+    /// If this issue has more than one page of labels, return its ID and a
+    /// [`GetLabels`] instance for retrieving the remaining labels
+    pub(crate) fn more_labels_query(
+        &self,
+        label_page_size: NonZeroUsize,
+    ) -> Option<(Id, GetLabels)> {
+        self.has_more_labels.then(|| {
+            (
+                self.issue_id.clone(),
+                GetLabels::new(
+                    self.issue_id.clone(),
+                    self.labels_cursor.clone(),
+                    label_page_size,
+                ),
+            )
+        })
+    }
+}
+
 /// GitHub issue details
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub(crate) struct Issue {
@@ -260,26 +280,6 @@ pub(crate) struct Issue {
 
     /// The timestamp at which the issue was last modified
     pub(crate) updated: String,
-}
-
-impl IssueWithLabels {
-    /// If this issue has more than one page of labels, return its ID and a
-    /// [`GetLabels`] instance for retrieving the remaining labels
-    pub(crate) fn more_labels_query(
-        &self,
-        label_page_size: NonZeroUsize,
-    ) -> Option<(Id, GetLabels)> {
-        self.has_more_labels.then(|| {
-            (
-                self.issue_id.clone(),
-                GetLabels::new(
-                    self.issue_id.clone(),
-                    self.labels_cursor.clone(),
-                    label_page_size,
-                ),
-            )
-        })
-    }
 }
 
 /// The "raw" deserialized representation of the data queried by
