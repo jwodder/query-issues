@@ -5,10 +5,20 @@ use serde::{Deserialize, Serialize};
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
+/// A [`Paginator`] for retrieving open issues from a given GitHub repository
+/// as pages of [`IssueWithLabels`]
+///
+/// For each issue, only the first page of labels is retrieved; any additional
+/// labels must be queried via [`GetLabels`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetIssues {
+    /// The GraphQL node ID of the repository for which to retrieve open issues
     repo_id: Id,
+
+    /// How many issues to request per page
     page_size: NonZeroUsize,
+
+    /// How many issue labels to request per page
     label_page_size: NonZeroUsize,
 }
 
@@ -40,12 +50,27 @@ impl Paginator for GetIssues {
     }
 }
 
+/// A [`QueryField`] for retrieving a page of open issues (as
+/// [`IssueWithLabels`] values) from a given GitHub repository starting at a
+/// given cursor
+///
+/// For each issue, only the first page of labels is retrieved; any additional
+/// labels must be queried via [`GetLabels`].
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetIssuesQuery {
+    /// The GraphQL node ID of the repository for which to retrieve open issues
     repo_id: Id,
+
+    /// The pagination cursor after which to retrieve issues
     cursor: Option<Cursor>,
+
+    /// How many issues to request per page
     page_size: NonZeroUsize,
+
+    /// How many issue labels to request per page
     label_page_size: NonZeroUsize,
+
+    /// The prefix to prepend to the variable names, if any
     prefix: Option<String>,
 }
 
@@ -65,6 +90,8 @@ impl GetIssuesQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the
+    /// repository ID, including any added prefixes
     fn repo_id_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_repo_id"),
@@ -72,6 +99,8 @@ impl GetIssuesQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the issue
+    /// cursor, including any added prefixes
     fn cursor_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_cursor"),
@@ -84,7 +113,11 @@ impl QueryField for GetIssuesQuery {
     type Output = Page<IssueWithLabels>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
-        self.prefix = Some(prefix);
+        let new_prefix = match self.prefix {
+            Some(p0) => format!("{prefix}_{p0}"),
+            None => prefix,
+        };
+        self.prefix = Some(new_prefix);
         self
     }
 
@@ -156,73 +189,82 @@ impl QueryField for GetIssuesQuery {
         &self,
         value: serde_json::Value,
     ) -> Result<Page<IssueWithLabels>, serde_json::Error> {
-        let raw = serde_json::from_value::<RepoWithIssues>(value)?;
+        let value = serde_json::from_value::<RepoDetails>(value)?;
+        let items = value
+            .issues
+            .items
+            .into_iter()
+            .map(|ri| IssueWithLabels {
+                issue_id: ri.id,
+                issue: Issue {
+                    repo: value.name_with_owner.clone(),
+                    number: ri.number,
+                    title: ri.title,
+                    url: ri.url,
+                    created: ri.created_at,
+                    updated: ri.updated_at,
+                    labels: ri.labels.items.into_iter().map(|lb| lb.0).collect(),
+                },
+                labels_cursor: ri.labels.end_cursor,
+                has_more_labels: ri.labels.has_next_page,
+            })
+            .collect();
+        let end_cursor = value.issues.end_cursor;
+        let has_next_page = value.issues.has_next_page;
         Ok(Page {
-            items: raw.issues,
-            end_cursor: raw.issue_cursor,
-            has_next_page: raw.has_more_issues,
+            items,
+            end_cursor,
+            has_next_page,
         })
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
-#[serde(from = "RawRepoDetails")]
-pub(crate) struct RepoWithIssues {
-    pub(crate) issues: Vec<IssueWithLabels>,
-    pub(crate) issue_cursor: Option<Cursor>,
-    pub(crate) has_more_issues: bool,
-}
-
-impl From<RawRepoDetails> for RepoWithIssues {
-    fn from(value: RawRepoDetails) -> RepoWithIssues {
-        RepoWithIssues {
-            issues: value
-                .issues
-                .items
-                .into_iter()
-                .map(|ri| IssueWithLabels {
-                    issue_id: ri.id,
-                    issue: Issue {
-                        repo: value.name_with_owner.clone(),
-                        number: ri.number,
-                        title: ri.title,
-                        url: ri.url,
-                        created: ri.created_at,
-                        updated: ri.updated_at,
-                        labels: ri.labels.items.into_iter().map(|lb| lb.0).collect(),
-                    },
-                    labels_cursor: ri.labels.end_cursor,
-                    has_more_labels: ri.labels.has_next_page,
-                })
-                .collect(),
-            issue_cursor: value.issues.end_cursor,
-            has_more_issues: value.issues.has_next_page,
-        }
-    }
-}
-
-#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub(crate) struct Issue {
-    pub(crate) repo: String,
-    pub(crate) number: u64,
-    pub(crate) title: String,
-    //pub(crate) author: String,
-    // Note: Reportedly, the max number of labels on an issue is 100
-    pub(crate) labels: Vec<String>,
-    pub(crate) url: String,
-    pub(crate) created: String,
-    pub(crate) updated: String,
-}
-
+/// Information on an open GitHub issue and pagination of its labels, retrieved
+/// by a [`GetIssues`] paginator or [`GetIssuesQuery`] query field
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct IssueWithLabels {
+    /// The issue's GraphQL node ID
     pub(crate) issue_id: Id,
+
+    /// Information about the issue itself
     pub(crate) issue: Issue,
+
+    /// Cursor for the start of any remaining labels for the issue
     pub(crate) labels_cursor: Option<Cursor>,
+
+    /// Are there more pages of labels after the ones here?
     pub(crate) has_more_labels: bool,
 }
 
+/// GitHub issue details
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub(crate) struct Issue {
+    /// The full name of the issue's repository in "OWNER/NAME" format
+    pub(crate) repo: String,
+
+    /// The issue's number
+    pub(crate) number: u64,
+
+    /// The issue's title
+    pub(crate) title: String,
+
+    /// The names of the issue's labels
+    // Note: Reportedly, the max number of labels on an issue is 100
+    pub(crate) labels: Vec<String>,
+
+    /// The HTTP URL to the web view for the issue
+    pub(crate) url: String,
+
+    /// The timestamp at which the issue was created
+    pub(crate) created: String,
+
+    /// The timestamp at which the issue was last modified
+    pub(crate) updated: String,
+}
+
 impl IssueWithLabels {
+    /// If this issue has more than one page of labels, return its ID and a
+    /// [`GetLabels`] instance for retrieving the remaining labels
     pub(crate) fn more_labels_query(
         &self,
         label_page_size: NonZeroUsize,
@@ -240,9 +282,11 @@ impl IssueWithLabels {
     }
 }
 
+/// The "raw" deserialized representation of the data queried by
+/// [`GetIssuesQuery`]
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(rename_all = "camelCase")]
-struct RawRepoDetails {
+struct RepoDetails {
     name_with_owner: String,
     issues: Page<RawIssue>,
 }
