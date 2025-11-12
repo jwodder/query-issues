@@ -1,48 +1,49 @@
 // See <https://users.rust-lang.org/t/125565/2> for what's up with the tricky
 // generic bounds on some structs
+use crate::QueryPayload;
 use crate::types::{Cursor, JsonMap, Page, Variable};
-use crate::{DEFAULT_BATCH_SIZE, QueryPayload};
 use indenter::indented;
 use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
-/// A trait for a GraphQL *selection set* (a brace-enclosed list of fields &
-/// fragments) that can be combined with other `QuerySelection` instances to
-/// form a complete query
-pub trait QuerySelection: Sized {
+/// A trait for an individual GraphQL *field* in a query, not including an alias
+/// component. [\[ref\]][field-def]
+///
+/// [field-def]: https://spec.graphql.org/September2025/#sec-Language.Fields
+pub trait QueryField: Sized {
     type Output;
 
     /// Return a modified instance of `self` in which all variable names are
     /// prefixed with `prefix`.
     ///
-    /// This allows for combining `QuerySelection` instances that would
-    /// otherwise have overlapping variable names.
+    /// This allows for combining `QueryField` instances that would otherwise
+    /// have overlapping variable names.
     fn with_variable_prefix(self, prefix: String) -> Self;
 
-    /// Write the text of the GraphQL selection set to `s`
-    fn write_selection<W: Write>(&self, s: W) -> fmt::Result;
+    /// Write the text of the GraphQL field to `s`
+    fn write_field<W: Write>(&self, s: W) -> fmt::Result;
 
     /// Return an iterator of variable names (including any prefixes previously
     /// specified with `with_variable_prefix()`) paired with the variables'
     /// types & values
     fn variables(&self) -> impl IntoIterator<Item = (String, Variable)>;
 
-    /// Parse the portion of a GraphQL response corresponding to this selection
-    /// set into an `Output` instance
+    /// Parse the portion of a GraphQL response corresponding to this field
+    /// into an `Output` instance
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error>;
 }
 
-/// A trait for values that can produce [`QuerySelection`]s that start
-/// paginating at a given cursor value and output [`Page`]s of items
+/// A trait for values that can produce [`QueryField`]s that start paginating
+/// at a given cursor value and output [`Page`]s of items
 pub trait Paginator {
-    /// The type of [`QuerySelection`] that this trait instance produces
-    type Selection: QuerySelection<Output = Page<Self::Item>>;
+    /// The type of [`QueryField`] that this trait instance produces
+    type Selection: QueryField<Output = Page<Self::Item>>;
 
-    /// The type of items that the [`QuerySelection`]s paginate over
+    /// The type of items that the [`QueryField`]s paginate over
     type Item;
 
-    /// Produce a [`QuerySelection`] that requests a page starting at the given
+    /// Produce a [`QueryField`] that requests a page starting at the given
     /// cursor value
     fn for_cursor(&self, cursor: Option<&Cursor>) -> Self::Selection;
 }
@@ -116,8 +117,8 @@ pub trait QueryMachine {
 }
 
 /// A [`QueryMachine`] that requests [`Paginator`]s in batches of up to a
-/// certain number of selection sets per query and keeps requesting subsequent
-/// pages of results until they all reach their end.
+/// certain number of fields per query and keeps requesting subsequent pages of
+/// results until they all reach their end.
 ///
 /// Each input `Paginator` is associated with a user-defined key, and when the
 /// queries for a given `Paginator` reach their end, the key is returned
@@ -140,17 +141,16 @@ pub struct BatchPaginator<K, P: Paginator<Item = Item>, Item = <P as Paginator>:
     /// `handle_response()`, `active` contains information on the paginators
     /// that were queried by the return value from `get_next_query()`.  The
     /// keys of the map are the GraphQL field aliases applied to the
-    /// corresponding selection sets.
+    /// corresponding fields.
     active: HashMap<String, ActiveQuery<K, P, P::Selection>>,
 
-    /// Maximum number of `QuerySelection`s to combine into a single query
+    /// Maximum number of `QueryField`s to combine into a single query
     batch_size: NonZeroUsize,
 }
 
 impl<K, P: Paginator> BatchPaginator<K, P> {
     /// Construct a new `BatchPaginator` from an iterable of (key, paginator)
-    /// pairs and a maximum number of selection sets to combine into a single
-    /// query.
+    /// pairs and a maximum number of fields to combine into a single query.
     ///
     /// The keys will be used in the [`PaginationResults`] returned by the
     /// `QueryMachine` to identify the corresponding original paginators.
@@ -166,17 +166,6 @@ impl<K, P: Paginator> BatchPaginator<K, P> {
             results,
             active,
             batch_size,
-        }
-    }
-}
-
-impl<K, P: Paginator> Default for BatchPaginator<K, P> {
-    fn default() -> Self {
-        BatchPaginator {
-            in_progress: VecDeque::new(),
-            results: Vec::new(),
-            active: HashMap::new(),
-            batch_size: DEFAULT_BATCH_SIZE,
         }
     }
 }
@@ -213,7 +202,7 @@ impl<K, P: Paginator> QueryMachine for BatchPaginator<K, P> {
             }
             write!(&mut qwrite, "{alias}: ").expect("writing to a string should not fail");
             query
-                .write_selection(&mut qwrite)
+                .write_field(&mut qwrite)
                 .expect("writing to a string should not fail");
             self.active.insert(alias, ActiveQuery { state, query });
         }
@@ -279,21 +268,21 @@ impl<K, P: Paginator> PaginationState<K, P> {
     }
 }
 
-/// Information on a pagination selection set that was included in a query by a
+/// Information on a pagination field that was included in a query by a
 /// [`BatchPaginator`] but has not yet had its results processed
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct ActiveQuery<K, P: Paginator<Selection = S>, S = <P as Paginator>::Selection> {
     /// The [`PaginationState`] for the [`Paginator`]
     state: PaginationState<K, P, P::Item>,
 
-    /// The [`QuerySelection`] that was included in the query, used to process
-    /// the selection set's portion of the response
+    /// The [`QueryField`] that was included in the query, used to process the
+    /// field's portion of the response
     query: S,
 }
 
 impl<K, P: Paginator> ActiveQuery<K, P> {
-    /// Parse the portion of a GraphQL response corresponding to this selection
-    /// set and update & return the [`PaginationState`]
+    /// Parse the portion of a GraphQL response corresponding to this field and
+    /// update & return the [`PaginationState`]
     fn process_response(
         mut self,
         value: serde_json::Value,

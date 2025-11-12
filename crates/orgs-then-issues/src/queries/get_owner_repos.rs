@@ -1,5 +1,5 @@
 use crate::types::Repository;
-use gqlient::{Cursor, Page, Paginator, QuerySelection, Singleton, Variable};
+use gqlient::{Cursor, Page, Paginator, QueryField, Singleton, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
@@ -58,7 +58,7 @@ impl GetOwnerReposQuery {
     }
 }
 
-impl QuerySelection for GetOwnerReposQuery {
+impl QueryField for GetOwnerReposQuery {
     type Output = Page<Repository>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
@@ -66,7 +66,7 @@ impl QuerySelection for GetOwnerReposQuery {
         self
     }
 
-    fn write_selection<W: Write>(&self, mut s: W) -> fmt::Result {
+    fn write_field<W: Write>(&self, mut s: W) -> fmt::Result {
         write!(
             s,
             indoc! {"
