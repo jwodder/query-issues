@@ -1,7 +1,7 @@
 mod machine;
 mod queries;
 mod types;
-use crate::machine::{FetchReport, OrgsWithIssues, Output, Parameters};
+use crate::machine::{FetchReport, OrgsWithIssues, Output, QueryLimits};
 use anyhow::Context;
 use clap::Parser;
 use gqlient::{Client, DEFAULT_BATCH_SIZE};
@@ -47,7 +47,7 @@ fn main() -> anyhow::Result<()> {
 
     let start = Instant::now();
     let timestamp = SystemTime::now();
-    let parameters = Parameters {
+    let parameters = QueryLimits {
         batch_size: args.batch_size,
         page_size: args.page_size,
         label_page_size: args.label_page_size,
@@ -111,7 +111,7 @@ struct Report {
     commit: Option<&'static str>,
     timestamp: String,
     owners: Vec<String>,
-    parameters: Parameters,
+    parameters: QueryLimits,
     fetched: FetchReport,
     elapsed: Duration,
     rate_limit_points: Option<u32>,

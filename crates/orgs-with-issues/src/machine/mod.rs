@@ -14,11 +14,11 @@ pub(crate) struct OrgsWithIssues {
 }
 
 impl OrgsWithIssues {
-    pub(crate) fn new(owners: Vec<String>, parameters: Parameters) -> OrgsWithIssues {
+    pub(crate) fn new(owners: Vec<String>, limits: QueryLimits) -> OrgsWithIssues {
         OrgsWithIssues {
             state: Start { owners }.into(),
             shared: Shared {
-                parameters,
+                limits,
                 results: Vec::new(),
                 report: FetchReport::default(),
             },
@@ -51,7 +51,7 @@ impl QueryMachine for OrgsWithIssues {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct Shared {
-    parameters: Parameters,
+    limits: QueryLimits,
     results: Vec<Output>,
     report: FetchReport,
 }
@@ -120,12 +120,12 @@ impl FetchRepos {
                     owner.clone(),
                     GetOwnerRepos::new(
                         owner,
-                        shared.parameters.page_size,
-                        shared.parameters.label_page_size,
+                        shared.limits.page_size,
+                        shared.limits.label_page_size,
                     ),
                 )
             }),
-            shared.parameters.batch_size,
+            shared.limits.batch_size,
         );
         if let query @ Some(_) = submachine.get_next_query() {
             shared.transition(Transition::StartFetchRepos);
@@ -178,10 +178,9 @@ impl MachineState for FetchRepos {
             .flat_map(|pr| pr.items)
         {
             shared.report.repositories += 1;
-            if let Some(q) = repo.more_issues_query(
-                shared.parameters.page_size,
-                shared.parameters.label_page_size,
-            ) {
+            if let Some(q) =
+                repo.more_issues_query(shared.limits.page_size, shared.limits.label_page_size)
+            {
                 shared.report.repos_with_extra_issues += 1;
                 self.issue_queries.push(q);
             }
@@ -189,7 +188,7 @@ impl MachineState for FetchRepos {
                 shared.report.repos_with_open_issues += 1;
                 for iwl in repo.issues {
                     shared.report.open_issues += 1;
-                    if let Some(q) = iwl.more_labels_query(shared.parameters.label_page_size) {
+                    if let Some(q) = iwl.more_labels_query(shared.limits.label_page_size) {
                         shared.report.issues_with_extra_labels += 1;
                         self.label_queries.push(q);
                         self.issues_needing_labels.insert(iwl.issue_id, iwl.issue);
@@ -221,7 +220,7 @@ impl FetchIssues {
         issues_needing_labels: HashMap<Id, Issue>,
         shared: &mut Shared,
     ) -> (State, Option<QueryPayload>) {
-        let mut submachine = BatchPaginator::new(issue_queries, shared.parameters.batch_size);
+        let mut submachine = BatchPaginator::new(issue_queries, shared.limits.batch_size);
         if let query @ Some(_) = submachine.get_next_query() {
             shared.transition(Transition::StartFetchIssues {
                 repos_with_extra_issues: shared.report.repos_with_extra_issues,
@@ -268,7 +267,7 @@ impl MachineState for FetchIssues {
         {
             shared.report.open_issues += 1;
             shared.report.extra_issues += 1;
-            if let Some(q) = iwl.more_labels_query(shared.parameters.label_page_size) {
+            if let Some(q) = iwl.more_labels_query(shared.limits.label_page_size) {
                 shared.report.issues_with_extra_labels += 1;
                 self.label_queries.push(q);
                 self.issues_needing_labels.insert(iwl.issue_id, iwl.issue);
@@ -296,7 +295,7 @@ impl FetchLabels {
         issues_needing_labels: HashMap<Id, Issue>,
         shared: &mut Shared,
     ) -> (State, Option<QueryPayload>) {
-        let mut submachine = BatchPaginator::new(label_queries, shared.parameters.batch_size);
+        let mut submachine = BatchPaginator::new(label_queries, shared.limits.batch_size);
         if let query @ Some(_) = submachine.get_next_query() {
             shared.transition(Transition::StartFetchLabels {
                 issues_with_extra_labels: shared.report.issues_with_extra_labels,
@@ -391,7 +390,7 @@ impl MachineState for Error {
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Serialize)]
 #[allow(clippy::struct_field_names)]
-pub(crate) struct Parameters {
+pub(crate) struct QueryLimits {
     pub(crate) batch_size: NonZeroUsize,
     pub(crate) page_size: NonZeroUsize,
     pub(crate) label_page_size: NonZeroUsize,
