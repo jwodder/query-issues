@@ -158,7 +158,6 @@ jobs:
         run: cargo fmt --all --check
 
   docs:
-    if: false  # Disabled for now
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
@@ -174,7 +173,7 @@ jobs:
         uses: Swatinem/rust-cache@v2
 
       - name: Check docs
-        run: cargo doc --no-deps --all-features
+        run: cargo doc --no-deps --all-features --document-private-items
         env:
           RUSTDOCFLAGS: -Dwarnings --cfg docsrs
 
