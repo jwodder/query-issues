@@ -1,12 +1,20 @@
-use crate::types::Repository;
-use gqlient::{Cursor, Page, Paginator, QueryField, Singleton, Variable};
+use super::GetIssues;
+use gqlient::{Cursor, Id, Page, Paginator, QueryField, Singleton, Variable};
 use indoc::indoc;
+use serde::Deserialize;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
+/// A [`Paginator`] for retrieving public, non-archived, non-fork repositories
+/// belonging to a given GitHub repository owner as pages of [`Repository`]
+/// values
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetOwnerRepos {
+    /// The repository owner (user or organization) for which to retrieve
+    /// repositories
     owner: String,
+
+    /// How many repositories to request per page
     page_size: NonZeroUsize,
 }
 
@@ -25,11 +33,22 @@ impl Paginator for GetOwnerRepos {
     }
 }
 
+/// A [`QueryField`] for retrieving a page of repositories (as [`Repository`]
+/// values) belonging to a given GitHub repository owner starting at a given
+/// cursor
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetOwnerReposQuery {
+    /// The repository owner (user or organization) for which to retrieve
+    /// repositories
     owner: String,
+
+    /// The pagination cursor after which to retrieve repositories
     cursor: Option<Cursor>,
+
+    /// How many repositories to request per page
     page_size: NonZeroUsize,
+
+    /// The prefix to prepend to the variable names, if any
     prefix: Option<String>,
 }
 
@@ -43,6 +62,8 @@ impl GetOwnerReposQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the
+    /// repository owner, including any added prefixes
     fn owner_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_owner"),
@@ -50,6 +71,8 @@ impl GetOwnerReposQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the
+    /// repository cursor, including any added prefixes
     fn cursor_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_cursor"),
@@ -62,7 +85,11 @@ impl QueryField for GetOwnerReposQuery {
     type Output = Page<Repository>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
-        self.prefix = Some(prefix);
+        let new_prefix = match self.prefix {
+            Some(p0) => format!("{prefix}_{p0}"),
+            None => prefix,
+        };
+        self.prefix = Some(new_prefix);
         self
     }
 
@@ -121,5 +148,38 @@ impl QueryField for GetOwnerReposQuery {
 
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error> {
         serde_json::from_value::<Singleton<Self::Output>>(value).map(|r| r.0)
+    }
+}
+
+/// Information on a GitHub repository retrieved by a [`GetOwnerRepos`]
+/// paginator or [`GetOwnerReposQuery`] query field
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(crate) struct Repository {
+    /// The repository's GraphQL node ID
+    pub(crate) id: Id,
+
+    /// The repository's full name in the form "OWNER/NAME"
+    #[serde(rename = "nameWithOwner")]
+    pub(crate) fullname: String,
+
+    /// The number of open issues currently in the repository
+    #[serde(rename = "issues", deserialize_with = "gqlient::singleton_field")]
+    pub(crate) open_issues: u64,
+}
+
+impl Repository {
+    /// If this repository has any open issues, return its ID and a
+    /// [`GetIssues`] instance for retrieving the open issues
+    pub(crate) fn issues_query(
+        &self,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> Option<(Id, GetIssues)> {
+        (self.open_issues > 0).then(|| {
+            (
+                self.id.clone(),
+                GetIssues::new(self.id.clone(), page_size, label_page_size),
+            )
+        })
     }
 }

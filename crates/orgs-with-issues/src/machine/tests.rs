@@ -6,7 +6,7 @@ use pretty_assertions::assert_eq;
 
 #[test]
 fn no_owners() {
-    let parameters = Parameters {
+    let parameters = QueryLimits {
         batch_size: DEFAULT_BATCH_SIZE,
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(10).unwrap(),
@@ -21,7 +21,7 @@ fn no_owners() {
 
 #[test]
 fn no_repos() {
-    let parameters = Parameters {
+    let parameters = QueryLimits {
         batch_size: DEFAULT_BATCH_SIZE,
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(10).unwrap(),
@@ -191,7 +191,7 @@ fn no_repos() {
 
 #[test]
 fn no_issues() {
-    let parameters = Parameters {
+    let parameters = QueryLimits {
         batch_size: DEFAULT_BATCH_SIZE,
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(10).unwrap(),
@@ -402,7 +402,7 @@ fn no_issues() {
 
 #[test]
 fn issues() {
-    let parameters = Parameters {
+    let parameters = QueryLimits {
         batch_size: DEFAULT_BATCH_SIZE,
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(10).unwrap(),
@@ -757,7 +757,7 @@ fn issues() {
 
 #[test]
 fn extra_labels() {
-    let parameters = Parameters {
+    let parameters = QueryLimits {
         batch_size: DEFAULT_BATCH_SIZE,
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(5).unwrap(),
@@ -997,7 +997,7 @@ fn extra_labels() {
 
 #[test]
 fn multiple_pages() {
-    let parameters = Parameters {
+    let parameters = QueryLimits {
         batch_size: DEFAULT_BATCH_SIZE,
         page_size: NonZeroUsize::new(5).unwrap(),
         label_page_size: NonZeroUsize::new(5).unwrap(),

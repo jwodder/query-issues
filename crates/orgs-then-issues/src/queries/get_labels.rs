@@ -3,10 +3,17 @@ use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
+/// A [`Paginator`] for retrieving names of labels on a given GitHub issue as
+/// pages of `String` values
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetLabels {
+    /// The GraphQL node ID of the issue for which to retrieve labels
     issue_id: Id,
+
+    /// The pagination cursor after which to retrieve labels
     cursor: Option<Cursor>,
+
+    /// How many issue labels to request per page
     label_page_size: NonZeroUsize,
 }
 
@@ -40,11 +47,20 @@ impl Paginator for GetLabels {
     }
 }
 
+/// A [`QueryField`] for retrieving a page of label names (as `String`s) for a
+/// given GitHub issue starting at a given cursor
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(crate) struct GetLabelsQuery {
+    /// The GraphQL node ID of the issue for which to retrieve labels
     issue_id: Id,
+
+    /// The pagination cursor after which to retrieve labels
     cursor: Option<Cursor>,
+
+    /// How many issue labels to request per page
     label_page_size: NonZeroUsize,
+
+    /// The prefix to prepend to the variable names, if any
     prefix: Option<String>,
 }
 
@@ -58,6 +74,8 @@ impl GetLabelsQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the issue ID,
+    /// including any added prefixes
     fn issue_id_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_issue_id"),
@@ -65,6 +83,8 @@ impl GetLabelsQuery {
         }
     }
 
+    /// Returns the name of the GraphQL variable used to refer to the label
+    /// cursor, including any added prefixes
     fn cursor_varname(&self) -> String {
         match self.prefix {
             Some(ref prefix) => format!("{prefix}_cursor"),
@@ -77,7 +97,11 @@ impl QueryField for GetLabelsQuery {
     type Output = Page<String>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
-        self.prefix = Some(prefix);
+        let new_prefix = match self.prefix {
+            Some(p0) => format!("{prefix}_{p0}"),
+            None => prefix,
+        };
+        self.prefix = Some(new_prefix);
         self
     }
 
