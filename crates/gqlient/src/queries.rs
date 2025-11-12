@@ -1,9 +1,9 @@
 // See <https://users.rust-lang.org/t/125565/2> for what's up with the tricky
 // generic bounds on some structs
 use crate::types::{Cursor, JsonMap, Page, Variable};
-use crate::{QueryPayload, DEFAULT_BATCH_SIZE};
+use crate::{DEFAULT_BATCH_SIZE, QueryPayload};
 use indenter::indented;
-use std::collections::{hash_map::Entry, HashMap, VecDeque};
+use std::collections::{HashMap, VecDeque, hash_map::Entry};
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 

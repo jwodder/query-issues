@@ -1,6 +1,6 @@
 use serde::{
-    de::{self, Deserializer, IgnoredAny, MapAccess, Visitor},
     Deserialize, Serialize,
+    de::{self, Deserializer, IgnoredAny, MapAccess, Visitor},
 };
 use std::fmt;
 use std::marker::PhantomData;

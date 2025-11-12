@@ -407,13 +407,36 @@ impl fmt::Display for Transition {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Transition::StartFetchRepos => write!(f, "Fetching repositories …"),
-            Transition::EndFetchRepos { repositories, repos_with_open_issues, elapsed } => write!(f, "Fetched {repositories} repositories ({repos_with_open_issues} with open issues) in {elapsed:?}"),
-            Transition::StartFetchIssues { repos_with_open_issues } => {
-                write!(f, "Fetching issues for {repos_with_open_issues} repositories …")
+            Transition::EndFetchRepos {
+                repositories,
+                repos_with_open_issues,
+                elapsed,
+            } => write!(
+                f,
+                "Fetched {repositories} repositories ({repos_with_open_issues} with open issues) in {elapsed:?}"
+            ),
+            Transition::StartFetchIssues {
+                repos_with_open_issues,
+            } => {
+                write!(
+                    f,
+                    "Fetching issues for {repos_with_open_issues} repositories …"
+                )
             }
-            Transition::EndFetchIssues { open_issues, elapsed } => write!(f, "Fetched {open_issues} issues in {elapsed:?}"),
-            Transition::StartFetchLabels { issues_with_extra_labels } => write!(f, "Fetching more labels for {issues_with_extra_labels} issues …"),
-            Transition::EndFetchLabels { extra_labels, elapsed } => write!(f, "Fetched {extra_labels} more labels in {elapsed:?}"),
+            Transition::EndFetchIssues {
+                open_issues,
+                elapsed,
+            } => write!(f, "Fetched {open_issues} issues in {elapsed:?}"),
+            Transition::StartFetchLabels {
+                issues_with_extra_labels,
+            } => write!(
+                f,
+                "Fetching more labels for {issues_with_extra_labels} issues …"
+            ),
+            Transition::EndFetchLabels {
+                extra_labels,
+                elapsed,
+            } => write!(f, "Fetched {extra_labels} more labels in {elapsed:?}"),
         }
     }
 }
