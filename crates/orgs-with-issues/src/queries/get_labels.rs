@@ -33,7 +33,7 @@ impl GetLabels {
 
 impl Paginator for GetLabels {
     type Item = String;
-    type Selection = GetLabelsQuery;
+    type Query = GetLabelsQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetLabelsQuery {
         GetLabelsQuery::new(
