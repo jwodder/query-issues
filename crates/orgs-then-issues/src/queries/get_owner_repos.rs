@@ -1,6 +1,7 @@
-use crate::types::Repository;
-use gqlient::{Cursor, Page, Paginator, QueryField, Singleton, Variable};
+use super::GetIssues;
+use gqlient::{Cursor, Id, Page, Paginator, QueryField, Singleton, Variable};
 use indoc::indoc;
+use serde::Deserialize;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
 
@@ -121,5 +122,38 @@ impl QueryField for GetOwnerReposQuery {
 
     fn parse_response(&self, value: serde_json::Value) -> Result<Self::Output, serde_json::Error> {
         serde_json::from_value::<Singleton<Self::Output>>(value).map(|r| r.0)
+    }
+}
+
+/// Information on a GitHub repository retrieved by a [`GetOwnerRepos`]
+/// paginator or [`GetOwnerReposQuery`] query field
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(crate) struct Repository {
+    /// The repository's GraphQL node ID
+    pub(crate) id: Id,
+
+    /// The repository's full name in the form "OWNER/NAME"
+    #[serde(rename = "nameWithOwner")]
+    pub(crate) fullname: String,
+
+    /// The number of open issues currently in the repository
+    #[serde(rename = "issues", deserialize_with = "gqlient::singleton_field")]
+    pub(crate) open_issues: u64,
+}
+
+impl Repository {
+    /// If this repository has any open issues, return its ID and a
+    /// [`GetIssues`] instance for retrieving the open issues
+    pub(crate) fn issues_query(
+        &self,
+        page_size: NonZeroUsize,
+        label_page_size: NonZeroUsize,
+    ) -> Option<(Id, GetIssues)> {
+        (self.open_issues > 0).then(|| {
+            (
+                self.id.clone(),
+                GetIssues::new(self.id.clone(), page_size, label_page_size),
+            )
+        })
     }
 }

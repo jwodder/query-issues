@@ -1,5 +1,4 @@
-use crate::queries::{GetIssues, GetLabels, GetOwnerRepos};
-use crate::types::Issue;
+use crate::queries::{GetIssues, GetLabels, GetOwnerRepos, Issue};
 use gqlient::{BatchPaginator, Id, JsonMap, QueryMachine, QueryPayload};
 use serde::Serialize;
 use std::collections::HashMap;

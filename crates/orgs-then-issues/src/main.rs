@@ -1,6 +1,5 @@
 mod machine;
 mod queries;
-mod types;
 use crate::machine::{FetchReport, OrgsThenIssues, Output, QueryLimits};
 use anyhow::Context;
 use clap::Parser;
