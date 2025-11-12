@@ -1,4 +1,4 @@
-use gqlient::{Cursor, Id, Page, Paginator, QuerySelection, Singleton, Variable};
+use gqlient::{Cursor, Id, Page, Paginator, QueryField, Singleton, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
@@ -73,7 +73,7 @@ impl GetLabelsQuery {
     }
 }
 
-impl QuerySelection for GetLabelsQuery {
+impl QueryField for GetLabelsQuery {
     type Output = Page<String>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
@@ -81,7 +81,7 @@ impl QuerySelection for GetLabelsQuery {
         self
     }
 
-    fn write_selection<W: Write>(&self, mut s: W) -> fmt::Result {
+    fn write_field<W: Write>(&self, mut s: W) -> fmt::Result {
         write!(
             s,
             indoc! {"

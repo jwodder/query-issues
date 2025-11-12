@@ -1,5 +1,5 @@
 use crate::types::{IssueWithLabels, RepoWithIssues};
-use gqlient::{Cursor, Id, Page, Paginator, QuerySelection, Variable};
+use gqlient::{Cursor, Id, Page, Paginator, QueryField, Variable};
 use indoc::indoc;
 use std::fmt::{self, Write};
 use std::num::NonZeroUsize;
@@ -85,7 +85,7 @@ impl GetIssuesQuery {
     }
 }
 
-impl QuerySelection for GetIssuesQuery {
+impl QueryField for GetIssuesQuery {
     type Output = Page<IssueWithLabels>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
@@ -93,7 +93,7 @@ impl QuerySelection for GetIssuesQuery {
         self
     }
 
-    fn write_selection<W: Write>(&self, mut s: W) -> fmt::Result {
+    fn write_field<W: Write>(&self, mut s: W) -> fmt::Result {
         write!(
             s,
             indoc! {"
