@@ -26,7 +26,7 @@ impl GetOwnerRepos {
 
 impl Paginator for GetOwnerRepos {
     type Item = Repository;
-    type Selection = GetOwnerReposQuery;
+    type Query = GetOwnerReposQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetOwnerReposQuery {
         GetOwnerReposQuery::new(self.owner.clone(), cursor.cloned(), self.page_size)

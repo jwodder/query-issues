@@ -38,14 +38,14 @@ pub trait QueryField: Sized {
 /// at a given cursor value and output [`Page`]s of items
 pub trait Paginator {
     /// The type of [`QueryField`] that this trait instance produces
-    type Selection: QueryField<Output = Page<Self::Item>>;
+    type Query: QueryField<Output = Page<Self::Item>>;
 
     /// The type of items that the [`QueryField`]s paginate over
     type Item;
 
     /// Produce a [`QueryField`] that requests a page starting at the given
     /// cursor value
-    fn for_cursor(&self, cursor: Option<&Cursor>) -> Self::Selection;
+    fn for_cursor(&self, cursor: Option<&Cursor>) -> Self::Query;
 }
 
 /// A trait for a sans-IO state machine for issuing multiple GraphQL queries
@@ -142,7 +142,7 @@ pub struct BatchPaginator<K, P: Paginator<Item = Item>, Item = <P as Paginator>:
     /// that were queried by the return value from `get_next_query()`.  The
     /// keys of the map are the GraphQL field aliases applied to the
     /// corresponding fields.
-    active: HashMap<String, ActiveQuery<K, P, P::Selection>>,
+    active: HashMap<String, ActiveQuery<K, P, P::Query>>,
 
     /// Maximum number of `QueryField`s to combine into a single query
     batch_size: NonZeroUsize,
@@ -271,7 +271,7 @@ impl<K, P: Paginator> PaginationState<K, P> {
 /// Information on a pagination field that was included in a query by a
 /// [`BatchPaginator`] but has not yet had its results processed
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct ActiveQuery<K, P: Paginator<Selection = S>, S = <P as Paginator>::Selection> {
+struct ActiveQuery<K, P: Paginator<Query = S>, S = <P as Paginator>::Query> {
     /// The [`PaginationState`] for the [`Paginator`]
     state: PaginationState<K, P, P::Item>,
 

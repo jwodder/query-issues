@@ -38,7 +38,7 @@ impl GetIssues {
 
 impl Paginator for GetIssues {
     type Item = IssueWithLabels;
-    type Selection = GetIssuesQuery;
+    type Query = GetIssuesQuery;
 
     fn for_cursor(&self, cursor: Option<&Cursor>) -> GetIssuesQuery {
         GetIssuesQuery::new(
