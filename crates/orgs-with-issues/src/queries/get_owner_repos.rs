@@ -83,7 +83,11 @@ impl QueryField for GetOwnerReposQuery {
     type Output = Page<RepoWithIssues>;
 
     fn with_variable_prefix(mut self, prefix: String) -> Self {
-        self.prefix = Some(prefix);
+        let new_prefix = match self.prefix {
+            Some(p0) => format!("{prefix}_{p0}"),
+            None => prefix,
+        };
+        self.prefix = Some(new_prefix);
         self
     }
 
