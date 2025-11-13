@@ -3,7 +3,7 @@ set -ex
 
 cd "$(dirname "$0")"
 
-commands=(orgs-then-issues orgs-with-issues)
+commands=(orgs-then-issues orgs-with-issues repos-and-issues)
 orgs=(jwodder wheelodex)
 
 for cmd in "${commands[@]}"
