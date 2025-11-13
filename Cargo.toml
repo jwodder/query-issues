@@ -8,7 +8,6 @@ rust-version = "1.88"
 authors = ["John Thorvald Wodder II <query-issues@varonathe.org>"]
 repository = "https://github.com/jwodder/query-issues"
 license = "MIT"
-publish = false
 
 [workspace.dependencies]
 anyhow = "1.0.82"
