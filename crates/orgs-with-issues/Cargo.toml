@@ -1,13 +1,11 @@
 [package]
 name = "orgs-with-issues"
-version = "0.1.0-dev"
 edition.workspace = true
 rust-version.workspace = true
 description = "Measure time to fetch open GitHub issues via GraphQL"
 authors.workspace = true
 repository.workspace = true
 license.workspace = true
-publish.workspace = true
 
 [dependencies]
 anyhow.workspace = true
@@ -25,7 +23,7 @@ serde_json.workspace = true
 anyhow.workspace = true
 
 [dev-dependencies]
-pretty_assertions = "1.4.1"
+pretty_assertions.workspace = true
 
 [lints]
 workspace = true
