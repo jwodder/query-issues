@@ -514,7 +514,7 @@ pub(crate) struct FetchReport {
     extra_labels: usize,
 }
 
-/// An announcement of a state transition, marking the start of end of a state
+/// An announcement of a state transition, marking the start or end of a state
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) enum Transition {
     /// The [`FetchRepos`] state has started
