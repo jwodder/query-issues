@@ -2524,6 +2524,6 @@ fn multiple_pages() {
 
     assert_eq!(
         record.get_new_events(),
-        [Event::EndFetchLabels { extra_labels: 18 }, Event::Done,]
+        [Event::EndFetchLabels { extra_labels: 18 }, Event::Done]
     );
 }

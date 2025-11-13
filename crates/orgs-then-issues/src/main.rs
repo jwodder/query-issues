@@ -180,7 +180,7 @@ impl EventSubscriber for &mut EventReporter {
 /// Information on how many of each type of thing were retrieved from the
 /// server
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
-pub(crate) struct FetchReport {
+struct FetchReport {
     /// Total number of repositories retrieved
     repositories: usize,
 

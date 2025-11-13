@@ -1,7 +1,7 @@
 mod machine;
 mod queries;
 mod types;
-use crate::machine::{FetchReport, OrgsWithIssues, Output, QueryLimits};
+use crate::machine::{Event, EventSubscriber, OrgsWithIssues, QueryLimits};
 use anyhow::Context;
 use clap::Parser;
 use gqlient::{Client, DEFAULT_BATCH_SIZE};
@@ -52,17 +52,10 @@ fn main() -> anyhow::Result<()> {
         page_size: args.page_size,
         label_page_size: args.label_page_size,
     };
-    let machine = OrgsWithIssues::new(args.owners.clone(), parameters);
-    let mut issues = Vec::new();
-    let mut fetched = None;
-    for output in client.run(machine) {
-        match output {
-            Ok(Output::Transition(t)) => eprintln!("[·] {t}"),
-            Ok(Output::Issues(ish)) => issues.extend(ish),
-            Ok(Output::Report(r)) => fetched = Some(r),
-            Err(e) => return Err(e.into()),
-        }
-    }
+    let mut recorder = EventReporter::new();
+    let machine =
+        OrgsWithIssues::new(args.owners.clone(), parameters).with_subscriber(&mut recorder);
+    let issues = client.run(machine).collect::<Result<Vec<_>, _>>()?;
     let elapsed = start.elapsed();
     eprintln!(
         "[·] Total of {} issues fetched in {:?}",
@@ -86,7 +79,7 @@ fn main() -> anyhow::Result<()> {
             timestamp: humantime::format_rfc3339(timestamp).to_string(),
             owners: args.owners,
             parameters,
-            fetched: fetched.expect("fetched should have been yielded"),
+            fetched: recorder.report,
             elapsed,
             rate_limit_points,
         };
@@ -115,4 +108,109 @@ struct Report {
     fetched: FetchReport,
     elapsed: Duration,
     rate_limit_points: Option<u32>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+struct EventReporter {
+    last_start_time: Option<Instant>,
+    report: FetchReport,
+}
+
+impl EventReporter {
+    fn new() -> EventReporter {
+        EventReporter {
+            last_start_time: None,
+            report: FetchReport::default(),
+        }
+    }
+
+    fn start_timer(&mut self) {
+        self.last_start_time = Some(Instant::now());
+    }
+
+    fn state_duration(&self) -> Duration {
+        self.last_start_time
+            .expect("ending state should have started")
+            .elapsed()
+    }
+}
+
+impl EventSubscriber for &mut EventReporter {
+    fn handle_event(&mut self, ev: Event) {
+        match ev {
+            Event::Start => (),
+            Event::StartFetchRepos => {
+                self.start_timer();
+                eprintln!("[·] Fetching repositories …");
+            }
+            Event::EndFetchRepos {
+                repositories,
+                repos_with_open_issues,
+                open_issues,
+            } => {
+                let elapsed = self.state_duration();
+                self.report.repositories = repositories;
+                self.report.repos_with_open_issues = repos_with_open_issues;
+                self.report.open_issues = open_issues;
+                eprintln!(
+                    "[·] Fetched {repositories} repositories ({repos_with_open_issues} with open issues; {open_issues} open issues in total) in {elapsed:?}"
+                );
+            }
+            Event::StartFetchIssues {
+                repos_with_extra_issues,
+            } => {
+                self.start_timer();
+                self.report.repos_with_extra_issues = repos_with_extra_issues;
+                eprintln!("[·] Fetching more issues for {repos_with_extra_issues} repositories …");
+            }
+            Event::EndFetchIssues { extra_issues } => {
+                let elapsed = self.state_duration();
+                self.report.open_issues += extra_issues;
+                self.report.extra_issues = extra_issues;
+                eprintln!("[·] Fetched {extra_issues} more issues in {elapsed:?}");
+            }
+            Event::StartFetchLabels {
+                issues_with_extra_labels,
+            } => {
+                self.start_timer();
+                self.report.issues_with_extra_labels = issues_with_extra_labels;
+                eprintln!("[·] Fetching more labels for {issues_with_extra_labels} issues …");
+            }
+            Event::EndFetchLabels { extra_labels } => {
+                let elapsed = self.state_duration();
+                self.report.extra_labels = extra_labels;
+                eprintln!("[·] Fetched {extra_labels} more labels in {elapsed:?}");
+            }
+            Event::Done => (),
+            Event::Error => (),
+        }
+    }
+}
+
+/// Information on how many of each type of thing were retrieved from the
+/// server
+#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
+struct FetchReport {
+    /// Total number of repositories retrieved
+    repositories: usize,
+
+    /// Total number of open issues retrieved
+    open_issues: usize,
+
+    /// Number of repositories retrieved that had open issues
+    repos_with_open_issues: usize,
+
+    /// Number of repositories retrieved that required extra queries to fetch
+    /// all issues
+    repos_with_extra_issues: usize,
+
+    /// Number of issues retrieved that required extra queries to fetch all
+    /// labels
+    issues_with_extra_labels: usize,
+
+    /// Total number of issues that required extra queries to retrieve
+    extra_issues: usize,
+
+    /// Total number of labels that required extra queries to retrieve
+    extra_labels: usize,
 }

@@ -34,7 +34,7 @@ impl OrgsThenIssues<()> {
             shared: Shared {
                 limits,
                 results: Vec::new(),
-                subscriber: None,
+                subscriber: (),
             },
         }
     }
@@ -55,7 +55,7 @@ impl<S> OrgsThenIssues<S> {
             shared: Shared {
                 limits,
                 results,
-                subscriber: Some(subscriber),
+                subscriber,
             },
         }
     }
@@ -98,7 +98,7 @@ struct Shared<S> {
 
     /// An [`EventSubscriber`] instance that transition events will be reported
     /// to
-    subscriber: Option<S>,
+    subscriber: S,
 }
 
 /// Behavior common to all states of the `OrgsThenIssues` state machine
@@ -515,14 +515,6 @@ pub(crate) trait EventSubscriber {
 
 impl EventSubscriber for () {
     fn handle_event(&mut self, _ev: Event) {}
-}
-
-impl<S: EventSubscriber> EventSubscriber for Option<S> {
-    fn handle_event(&mut self, ev: Event) {
-        if let Some(s) = self.as_mut() {
-            s.handle_event(ev);
-        }
-    }
 }
 
 /// An announcement of a state transition, marking the start or end of a state
