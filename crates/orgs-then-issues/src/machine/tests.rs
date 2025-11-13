@@ -1,8 +1,28 @@
 use super::*;
-use assert_matches::assert_matches;
 use gqlient::DEFAULT_BATCH_SIZE;
 use indoc::indoc;
 use pretty_assertions::assert_eq;
+use std::cell::RefCell;
+use std::rc::Rc;
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct EventRecorder(RefCell<Vec<Event>>);
+
+impl EventRecorder {
+    fn new() -> Rc<EventRecorder> {
+        Rc::new(EventRecorder(RefCell::new(Vec::new())))
+    }
+
+    fn get_new_events(self: &Rc<Self>) -> Vec<Event> {
+        self.0.borrow_mut().drain(..).collect()
+    }
+}
+
+impl EventSubscriber for Rc<EventRecorder> {
+    fn handle_event(&mut self, ev: Event) {
+        self.0.borrow_mut().push(ev);
+    }
+}
 
 #[test]
 fn no_owners() {
@@ -11,12 +31,12 @@ fn no_owners() {
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(10).unwrap(),
     };
-    let mut machine = OrgsThenIssues::new(Vec::new(), parameters);
+    let record = EventRecorder::new();
+    let mut machine =
+        OrgsThenIssues::new(Vec::new(), parameters).with_subscriber(Rc::clone(&record));
     assert_eq!(machine.get_next_query(), None);
-    assert_eq!(
-        machine.get_output(),
-        vec![Output::Report(FetchReport::default())]
-    );
+    assert!(machine.get_output().is_empty());
+    assert_eq!(record.get_new_events(), [Event::Start, Event::Done]);
 }
 
 #[test]
@@ -26,7 +46,9 @@ fn no_repos() {
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(10).unwrap(),
     };
-    let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters);
+    let record = EventRecorder::new();
+    let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters)
+        .with_subscriber(Rc::clone(&record));
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -91,9 +113,10 @@ fn no_repos() {
         ])
     );
 
+    assert!(machine.get_output().is_empty());
     assert_eq!(
-        machine.get_output(),
-        vec![Output::Transition(Transition::StartFetchRepos)]
+        record.get_new_events(),
+        [Event::Start, Event::StartFetchRepos]
     );
 
     let response = JsonMap::from_iter([
@@ -125,20 +148,21 @@ fn no_repos() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     assert_eq!(machine.get_next_query(), None);
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 2);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchRepos {
-            repositories: 0,
-            repos_with_open_issues: 0,
-            ..
-        })
+    assert!(machine.get_output().is_empty());
+    assert_eq!(
+        record.get_new_events(),
+        [
+            Event::EndFetchRepos {
+                repositories: 0,
+                repos_with_open_issues: 0
+            },
+            Event::Done
+        ]
     );
-    assert_eq!(outputs[1], Output::Report(FetchReport::default()));
 }
 
 #[test]
@@ -148,7 +172,9 @@ fn no_issues() {
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(10).unwrap(),
     };
-    let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters);
+    let record = EventRecorder::new();
+    let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters)
+        .with_subscriber(Rc::clone(&record));
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -213,9 +239,10 @@ fn no_issues() {
         ])
     );
 
+    assert!(machine.get_output().is_empty());
     assert_eq!(
-        machine.get_output(),
-        vec![Output::Transition(Transition::StartFetchRepos)]
+        record.get_new_events(),
+        [Event::Start, Event::StartFetchRepos]
     );
 
     let response = JsonMap::from_iter([
@@ -270,25 +297,20 @@ fn no_issues() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     assert_eq!(machine.get_next_query(), None);
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 2);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchRepos {
-            repositories: 3,
-            repos_with_open_issues: 0,
-            ..
-        })
-    );
+    assert!(machine.get_output().is_empty());
     assert_eq!(
-        outputs[1],
-        Output::Report(FetchReport {
-            repositories: 3,
-            ..FetchReport::default()
-        })
+        record.get_new_events(),
+        [
+            Event::EndFetchRepos {
+                repositories: 3,
+                repos_with_open_issues: 0
+            },
+            Event::Done
+        ]
     );
 }
 
@@ -299,7 +321,9 @@ fn issues() {
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(10).unwrap(),
     };
-    let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters);
+    let record = EventRecorder::new();
+    let mut machine = OrgsThenIssues::new(vec!["octocat".into(), "achtkatze".into()], parameters)
+        .with_subscriber(Rc::clone(&record));
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -364,9 +388,10 @@ fn issues() {
         ])
     );
 
+    assert!(machine.get_output().is_empty());
     assert_eq!(
-        machine.get_output(),
-        vec![Output::Transition(Transition::StartFetchRepos)]
+        record.get_new_events(),
+        [Event::Start, Event::StartFetchRepos]
     );
 
     let response = JsonMap::from_iter([
@@ -421,6 +446,7 @@ fn issues() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -505,21 +531,16 @@ fn issues() {
         ])
     );
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 2);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchRepos {
-            repositories: 3,
-            repos_with_open_issues: 2,
-            ..
-        })
-    );
-    assert_matches!(
-        outputs[1],
-        Output::Transition(Transition::StartFetchIssues {
-            repos_with_open_issues: 2,
-        })
+    assert!(machine.get_output().is_empty());
+    assert_eq!(
+        record.get_new_events(),
+        [
+            Event::EndFetchRepos {
+                repositories: 3,
+                repos_with_open_issues: 2
+            },
+            Event::StartFetchIssues
+        ]
     );
 
     let response = JsonMap::from_iter([
@@ -643,11 +664,9 @@ fn issues() {
     ]);
     assert!(machine.handle_response(response).is_ok());
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 1);
     assert_eq!(
-        outputs[0],
-        Output::Issues(vec![
+        machine.get_output(),
+        [
             Issue {
                 repo: "octocat/repo1".into(),
                 number: 1,
@@ -693,25 +712,16 @@ fn issues() {
                 created: "2020-06-16T00:00:00Z".into(),
                 updated: "2020-06-16T00:00:00Z".into(),
             },
-        ])
+        ]
     );
+    assert!(record.get_new_events().is_empty());
 
     assert_eq!(machine.get_next_query(), None);
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 2);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchIssues { open_issues: 5, .. })
-    );
+    assert!(machine.get_output().is_empty());
     assert_eq!(
-        outputs[1],
-        Output::Report(FetchReport {
-            repositories: 3,
-            repos_with_open_issues: 2,
-            open_issues: 5,
-            ..FetchReport::default()
-        })
+        record.get_new_events(),
+        [Event::EndFetchIssues { open_issues: 5 }, Event::Done,]
     );
 }
 
@@ -722,7 +732,9 @@ fn extra_labels() {
         page_size: NonZeroUsize::new(100).unwrap(),
         label_page_size: NonZeroUsize::new(5).unwrap(),
     };
-    let mut machine = OrgsThenIssues::new(vec!["monocat".into()], parameters);
+    let record = EventRecorder::new();
+    let mut machine =
+        OrgsThenIssues::new(vec!["monocat".into()], parameters).with_subscriber(Rc::clone(&record));
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -762,9 +774,10 @@ fn extra_labels() {
         ])
     );
 
+    assert!(machine.get_output().is_empty());
     assert_eq!(
-        machine.get_output(),
-        vec![Output::Transition(Transition::StartFetchRepos)]
+        record.get_new_events(),
+        [Event::Start, Event::StartFetchRepos]
     );
 
     let response = JsonMap::from_iter([(
@@ -790,6 +803,7 @@ fn extra_labels() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -839,21 +853,16 @@ fn extra_labels() {
         ])
     );
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 2);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchRepos {
-            repositories: 1,
-            repos_with_open_issues: 1,
-            ..
-        })
-    );
-    assert_matches!(
-        outputs[1],
-        Output::Transition(Transition::StartFetchIssues {
-            repos_with_open_issues: 1,
-        })
+    assert!(machine.get_output().is_empty());
+    assert_eq!(
+        record.get_new_events(),
+        [
+            Event::EndFetchRepos {
+                repositories: 1,
+                repos_with_open_issues: 1
+            },
+            Event::StartFetchIssues
+        ]
     );
 
     let response = JsonMap::from_iter([(
@@ -894,6 +903,7 @@ fn extra_labels() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -926,17 +936,15 @@ fn extra_labels() {
         ])
     );
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 2);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchIssues { open_issues: 1, .. })
-    );
-    assert_matches!(
-        outputs[1],
-        Output::Transition(Transition::StartFetchLabels {
-            issues_with_extra_labels: 1
-        })
+    assert!(machine.get_output().is_empty());
+    assert_eq!(
+        record.get_new_events(),
+        [
+            Event::EndFetchIssues { open_issues: 1 },
+            Event::StartFetchLabels {
+                issues_with_extra_labels: 1
+            },
+        ]
     );
 
     let response = JsonMap::from_iter([(
@@ -958,21 +966,13 @@ fn extra_labels() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     assert_eq!(machine.get_next_query(), None);
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 3);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchLabels {
-            extra_labels: 3,
-            ..
-        })
-    );
     assert_eq!(
-        outputs[1],
-        Output::Issues(vec![Issue {
+        machine.get_output(),
+        [Issue {
             repo: "monocat/rainbow".into(),
             number: 1,
             title: "We need more colors".into(),
@@ -989,17 +989,12 @@ fn extra_labels() {
             url: "https://example.github/monocat/rainbow/issues/1".into(),
             created: "2020-01-01T00:00:00Z".into(),
             updated: "2020-01-01T00:00:00Z".into(),
-        },])
+        }]
     );
+
     assert_eq!(
-        outputs[2],
-        Output::Report(FetchReport {
-            repositories: 1,
-            repos_with_open_issues: 1,
-            open_issues: 1,
-            issues_with_extra_labels: 1,
-            extra_labels: 3,
-        })
+        record.get_new_events(),
+        [Event::EndFetchLabels { extra_labels: 3 }, Event::Done]
     );
 }
 
@@ -1010,7 +1005,9 @@ fn multiple_pages() {
         page_size: NonZeroUsize::new(5).unwrap(),
         label_page_size: NonZeroUsize::new(5).unwrap(),
     };
-    let mut machine = OrgsThenIssues::new(vec!["quadcat".into(), "ochocat".into()], parameters);
+    let record = EventRecorder::new();
+    let mut machine = OrgsThenIssues::new(vec!["quadcat".into(), "ochocat".into()], parameters)
+        .with_subscriber(Rc::clone(&record));
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -1075,9 +1072,10 @@ fn multiple_pages() {
         ])
     );
 
+    assert!(machine.get_output().is_empty());
     assert_eq!(
-        machine.get_output(),
-        vec![Output::Transition(Transition::StartFetchRepos)]
+        record.get_new_events(),
+        [Event::Start, Event::StartFetchRepos]
     );
 
     let response = JsonMap::from_iter([
@@ -1181,6 +1179,7 @@ fn multiple_pages() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -1246,6 +1245,7 @@ fn multiple_pages() {
     );
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let response = JsonMap::from_iter([
         (
@@ -1327,6 +1327,7 @@ fn multiple_pages() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -1367,6 +1368,7 @@ fn multiple_pages() {
     );
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let response = JsonMap::from_iter([(
         "q0".into(),
@@ -1419,6 +1421,7 @@ fn multiple_pages() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -1503,21 +1506,16 @@ fn multiple_pages() {
         ])
     );
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 2);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchRepos {
-            repositories: 22,
-            repos_with_open_issues: 2,
-            ..
-        })
-    );
-    assert_matches!(
-        outputs[1],
-        Output::Transition(Transition::StartFetchIssues {
-            repos_with_open_issues: 2,
-        })
+    assert!(machine.get_output().is_empty());
+    assert_eq!(
+        record.get_new_events(),
+        [
+            Event::EndFetchRepos {
+                repositories: 22,
+                repos_with_open_issues: 2
+            },
+            Event::StartFetchIssues
+        ]
     );
 
     let response = JsonMap::from_iter([
@@ -1740,6 +1738,7 @@ fn multiple_pages() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -1825,6 +1824,7 @@ fn multiple_pages() {
     );
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let response = JsonMap::from_iter([
         (
@@ -1967,10 +1967,9 @@ fn multiple_pages() {
     ]);
     assert!(machine.handle_response(response).is_ok());
 
-    let outputs = machine.get_output();
     assert_eq!(
-        outputs,
-        vec![Output::Issues(vec![
+        machine.get_output(),
+        [
             Issue {
                 repo: "quadcat/example".into(),
                 number: 2,
@@ -2028,8 +2027,9 @@ fn multiple_pages() {
                 created: "2023-12-23T05:52:34Z".into(),
                 updated: "2023-12-23T05:52:34Z".into(),
             },
-        ])]
+        ]
     );
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -2080,6 +2080,7 @@ fn multiple_pages() {
     );
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let response = JsonMap::from_iter([(
         "q0".into(),
@@ -2118,10 +2119,9 @@ fn multiple_pages() {
     )]);
     assert!(machine.handle_response(response).is_ok());
 
-    let outputs = machine.get_output();
     assert_eq!(
-        outputs,
-        vec![Output::Issues(vec![
+        machine.get_output(),
+        [
             Issue {
                 repo: "ochocat/rainbow".into(),
                 number: 1,
@@ -2212,8 +2212,9 @@ fn multiple_pages() {
                 created: "2020-01-01T00:09:00Z".into(),
                 updated: "2020-01-01T00:09:00Z".into(),
             },
-        ])]
+        ]
     );
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -2264,20 +2265,15 @@ fn multiple_pages() {
         ])
     );
 
-    let outputs = machine.get_output();
-    assert_eq!(outputs.len(), 2);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchIssues {
-            open_issues: 17,
-            ..
-        })
-    );
-    assert_matches!(
-        outputs[1],
-        Output::Transition(Transition::StartFetchLabels {
-            issues_with_extra_labels: 2
-        })
+    assert!(machine.get_output().is_empty());
+    assert_eq!(
+        record.get_new_events(),
+        [
+            Event::EndFetchIssues { open_issues: 17 },
+            Event::StartFetchLabels {
+                issues_with_extra_labels: 2
+            },
+        ]
     );
 
     let response = JsonMap::from_iter([
@@ -2321,6 +2317,7 @@ fn multiple_pages() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -2372,6 +2369,7 @@ fn multiple_pages() {
     );
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let response = JsonMap::from_iter([
         (
@@ -2410,6 +2408,7 @@ fn multiple_pages() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let payload = machine.get_next_query().unwrap();
     assert_eq!(
@@ -2443,6 +2442,7 @@ fn multiple_pages() {
     );
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     let response = JsonMap::from_iter([(
         "q0".into(),
@@ -2462,24 +2462,15 @@ fn multiple_pages() {
     assert!(machine.handle_response(response).is_ok());
 
     assert!(machine.get_output().is_empty());
+    assert!(record.get_new_events().is_empty());
 
     assert_eq!(machine.get_next_query(), None);
 
     let mut outputs = machine.get_output();
-    assert_eq!(outputs.len(), 3);
-    assert_matches!(
-        outputs[0],
-        Output::Transition(Transition::EndFetchLabels {
-            extra_labels: 18,
-            ..
-        })
-    );
-    if let Output::Issues(issues) = &mut outputs[1] {
-        issues.sort_unstable_by_key(|ish| (ish.repo.clone(), ish.number));
-    }
+    outputs.sort_unstable_by_key(|ish| (ish.repo.clone(), ish.number));
     assert_eq!(
-        outputs[1],
-        Output::Issues(vec![
+        outputs,
+        [
             Issue {
                 repo: "ochocat/rainbow".into(),
                 number: 11,
@@ -2528,16 +2519,11 @@ fn multiple_pages() {
                 created: "2020-01-01T00:00:00Z".into(),
                 updated: "2020-01-01T00:00:00Z".into(),
             },
-        ])
+        ]
     );
+
     assert_eq!(
-        outputs[2],
-        Output::Report(FetchReport {
-            repositories: 22,
-            repos_with_open_issues: 2,
-            open_issues: 17,
-            issues_with_extra_labels: 2,
-            extra_labels: 18,
-        })
+        record.get_new_events(),
+        [Event::EndFetchLabels { extra_labels: 18 }, Event::Done]
     );
 }
