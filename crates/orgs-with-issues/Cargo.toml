@@ -23,7 +23,7 @@ serde_json.workspace = true
 anyhow.workspace = true
 
 [dev-dependencies]
-pretty_assertions = "1.4.1"
+pretty_assertions.workspace = true
 
 [lints]
 workspace = true
