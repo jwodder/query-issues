@@ -513,7 +513,6 @@ name = "orgs-then-issues"
 version = "0.1.0-dev"
 dependencies = [
  "anyhow",
- "assert_matches",
  "clap",
  "enum_dispatch",
  "gqlient",

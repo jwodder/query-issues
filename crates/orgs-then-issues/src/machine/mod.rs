@@ -2,9 +2,7 @@ use crate::queries::{GetIssues, GetLabels, GetOwnerRepos, Issue};
 use gqlient::{BatchPaginator, Id, JsonMap, QueryMachine, QueryPayload};
 use serde::Serialize;
 use std::collections::HashMap;
-use std::fmt;
 use std::num::NonZeroUsize;
-use std::time::{Duration, Instant};
 
 /// A [`QueryMachine`] for fetching open issues in repositories owned by given
 /// users and/or organizations.
@@ -19,31 +17,52 @@ use std::time::{Duration, Instant};
 /// - If any open issue has more than one page of labels, paginated queries for
 ///   the remaining labels for those issues
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) struct OrgsThenIssues {
+pub(crate) struct OrgsThenIssues<S> {
     /// Internal state
     state: State,
 
     /// Common data passed to methods of `state`
-    shared: Shared,
+    shared: Shared<S>,
 }
 
-impl OrgsThenIssues {
+impl OrgsThenIssues<()> {
     /// Create a new `OrgsThenIssues` instance that will fetch open issues in
     /// repositories owned by any owners listed in `owners`
-    pub(crate) fn new(owners: Vec<String>, limits: QueryLimits) -> OrgsThenIssues {
+    pub(crate) fn new(owners: Vec<String>, limits: QueryLimits) -> OrgsThenIssues<()> {
         OrgsThenIssues {
             state: Start { owners }.into(),
             shared: Shared {
                 limits,
                 results: Vec::new(),
-                report: FetchReport::default(),
+                subscriber: None,
             },
         }
     }
 }
 
-impl QueryMachine for OrgsThenIssues {
-    type Output = Output;
+impl<S> OrgsThenIssues<S> {
+    /// Set the [`EventSubscriber`] that the `OrgsThenIssues` will report
+    /// transition events to
+    pub(crate) fn with_subscriber<S2>(self, subscriber: S2) -> OrgsThenIssues<S2> {
+        let OrgsThenIssues {
+            state,
+            shared: Shared {
+                limits, results, ..
+            },
+        } = self;
+        OrgsThenIssues {
+            state,
+            shared: Shared {
+                limits,
+                results,
+                subscriber: Some(subscriber),
+            },
+        }
+    }
+}
+
+impl<S: EventSubscriber> QueryMachine for OrgsThenIssues<S> {
+    type Output = Issue;
 
     fn get_next_query(&mut self) -> Option<QueryPayload> {
         let (state, output) =
@@ -56,11 +75,12 @@ impl QueryMachine for OrgsThenIssues {
         let r = self.state.handle_response(data, &mut self.shared);
         if r.is_err() {
             self.state = Error.into();
+            self.shared.subscriber.handle_event(Event::Error);
         }
         r
     }
 
-    fn get_output(&mut self) -> Vec<Self::Output> {
+    fn get_output(&mut self) -> Vec<Issue> {
         self.shared.results.drain(..).collect()
     }
 }
@@ -68,23 +88,17 @@ impl QueryMachine for OrgsThenIssues {
 /// Data on the `OrgsThenIssues` instance that is accessed by the methods of
 /// the individual states
 #[derive(Clone, Debug, Eq, PartialEq)]
-struct Shared {
+struct Shared<S> {
     /// Batching & pagination limits to obey when forming queries
     limits: QueryLimits,
 
     /// Output produced by the `QueryMachine` that has not yet been returned by
     /// a call to `get_output()`
-    results: Vec<Output>,
+    results: Vec<Issue>,
 
-    /// Information on how many things were retrieved from the server
-    report: FetchReport,
-}
-
-impl Shared {
-    /// Append a [`Transition`] instance to `results`
-    fn transition(&mut self, t: Transition) {
-        self.results.push(Output::Transition(t));
-    }
+    /// An [`EventSubscriber`] instance that transition events will be reported
+    /// to
+    subscriber: Option<S>,
 }
 
 /// Behavior common to all states of the `OrgsThenIssues` state machine
@@ -93,15 +107,18 @@ trait MachineState {
     /// Obtain the next query, if any, to perform against the GraphQL server
     /// along with the updated internal state (which may or may not be the same
     /// type as before)
-    fn get_next_query(self, shared: &mut Shared) -> (State, Option<QueryPayload>);
+    fn get_next_query<S: EventSubscriber>(
+        self,
+        shared: &mut Shared<S>,
+    ) -> (State, Option<QueryPayload>);
 
     /// Provide the state with the deserialized value of the `"data"` field
     /// from a successful response to the query returned by the most recent
     /// call to some state's `get_next_query()`
-    fn handle_response(
+    fn handle_response<S: EventSubscriber>(
         &mut self,
         data: JsonMap,
-        shared: &mut Shared,
+        shared: &mut Shared<S>,
     ) -> Result<(), serde_json::Error>;
 }
 
@@ -134,14 +151,18 @@ struct Start {
 }
 
 impl MachineState for Start {
-    fn get_next_query(self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+    fn get_next_query<S: EventSubscriber>(
+        self,
+        shared: &mut Shared<S>,
+    ) -> (State, Option<QueryPayload>) {
+        shared.subscriber.handle_event(Event::Start);
         FetchRepos::start(self.owners, shared)
     }
 
-    fn handle_response(
+    fn handle_response<S: EventSubscriber>(
         &mut self,
         _data: JsonMap,
-        _shared: &mut Shared,
+        _shared: &mut Shared<S>,
     ) -> Result<(), serde_json::Error> {
         panic!("handle_response() called before get_next_query()")
     }
@@ -158,19 +179,22 @@ struct FetchRepos {
     /// An inner `QueryMachine` for performing the queries for this state
     submachine: BatchPaginator<String, GetOwnerRepos>,
 
-    /// The time at which this state began
-    start: Instant,
-
     /// A list of (repository ID, [`GetIssues`] paginator) pairs for any
     /// repositories fetched so far that have open issues
     issue_queries: Vec<(Id, GetIssues)>,
+
+    /// Total number of repositories retrieved so far
+    repositories: usize,
 }
 
 impl FetchRepos {
     /// Transition into this state and return the state's first query — unless
     /// `owners` is empty, in which case the state transitions to [`Done`]
     /// instead and no query is returned
-    fn start(owners: Vec<String>, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+    fn start<S: EventSubscriber>(
+        owners: Vec<String>,
+        shared: &mut Shared<S>,
+    ) -> (State, Option<QueryPayload>) {
         let mut submachine = BatchPaginator::new(
             owners.into_iter().map(|owner| {
                 (
@@ -181,11 +205,11 @@ impl FetchRepos {
             shared.limits.batch_size,
         );
         if let query @ Some(_) = submachine.get_next_query() {
-            shared.transition(Transition::StartFetchRepos);
+            shared.subscriber.handle_event(Event::StartFetchRepos);
             let state = FetchRepos {
                 submachine,
-                start: Instant::now(),
                 issue_queries: Vec::new(),
+                repositories: 0,
             }
             .into();
             (state, query)
@@ -196,23 +220,25 @@ impl FetchRepos {
 }
 
 impl MachineState for FetchRepos {
-    fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+    fn get_next_query<S: EventSubscriber>(
+        mut self,
+        shared: &mut Shared<S>,
+    ) -> (State, Option<QueryPayload>) {
         if let query @ Some(_) = self.submachine.get_next_query() {
             (self.into(), query)
         } else {
-            shared.transition(Transition::EndFetchRepos {
-                repositories: shared.report.repositories,
-                repos_with_open_issues: shared.report.repos_with_open_issues,
-                elapsed: self.start.elapsed(),
+            shared.subscriber.handle_event(Event::EndFetchRepos {
+                repositories: self.repositories,
+                repos_with_open_issues: self.issue_queries.len(),
             });
             FetchIssues::start(self.issue_queries, shared)
         }
     }
 
-    fn handle_response(
+    fn handle_response<S: EventSubscriber>(
         &mut self,
         data: JsonMap,
-        shared: &mut Shared,
+        shared: &mut Shared<S>,
     ) -> Result<(), serde_json::Error> {
         self.submachine.handle_response(data)?;
         for repo in self
@@ -221,11 +247,10 @@ impl MachineState for FetchRepos {
             .into_iter()
             .flat_map(|pr| pr.items)
         {
-            shared.report.repositories += 1;
+            self.repositories += 1;
             if let Some(q) =
                 repo.issues_query(shared.limits.page_size, shared.limits.label_page_size)
             {
-                shared.report.repos_with_open_issues += 1;
                 self.issue_queries.push(q);
             }
         }
@@ -245,9 +270,6 @@ struct FetchIssues {
     /// An inner `QueryMachine` for performing the queries for this state
     submachine: BatchPaginator<Id, GetIssues>,
 
-    /// The time at which this state began
-    start: Instant,
-
     /// A list of (issue ID, [`GetLabels`] paginator) pairs for any issues
     /// fetched so far that have more than one page of labels
     label_queries: Vec<(Id, GetLabels)>,
@@ -255,6 +277,9 @@ struct FetchIssues {
     /// A collection of all issues fetched so far that have more than one page
     /// of labels, keyed by issue ID
     issues_needing_labels: HashMap<Id, Issue>,
+
+    /// Total number of open issues retrieved so far
+    open_issues: usize,
 }
 
 impl FetchIssues {
@@ -264,20 +289,18 @@ impl FetchIssues {
     ///
     /// `issue_queries` is a list of (repository ID, [`GetIssues`] paginator)
     /// pairs corresponding to repositories that have open issues.
-    fn start(
+    fn start<S: EventSubscriber>(
         issue_queries: Vec<(Id, GetIssues)>,
-        shared: &mut Shared,
+        shared: &mut Shared<S>,
     ) -> (State, Option<QueryPayload>) {
         let mut submachine = BatchPaginator::new(issue_queries, shared.limits.batch_size);
         if let query @ Some(_) = submachine.get_next_query() {
-            shared.transition(Transition::StartFetchIssues {
-                repos_with_open_issues: shared.report.repos_with_open_issues,
-            });
+            shared.subscriber.handle_event(Event::StartFetchIssues);
             let state = FetchIssues {
                 submachine,
-                start: Instant::now(),
                 label_queries: Vec::new(),
                 issues_needing_labels: HashMap::new(),
+                open_issues: 0,
             }
             .into();
             (state, query)
@@ -288,42 +311,39 @@ impl FetchIssues {
 }
 
 impl MachineState for FetchIssues {
-    fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+    fn get_next_query<S: EventSubscriber>(
+        mut self,
+        shared: &mut Shared<S>,
+    ) -> (State, Option<QueryPayload>) {
         if let query @ Some(_) = self.submachine.get_next_query() {
             (self.into(), query)
         } else {
-            shared.transition(Transition::EndFetchIssues {
-                open_issues: shared.report.open_issues,
-                elapsed: self.start.elapsed(),
+            shared.subscriber.handle_event(Event::EndFetchIssues {
+                open_issues: self.open_issues,
             });
             FetchLabels::start(self.label_queries, self.issues_needing_labels, shared)
         }
     }
 
-    fn handle_response(
+    fn handle_response<S: EventSubscriber>(
         &mut self,
         data: JsonMap,
-        shared: &mut Shared,
+        shared: &mut Shared<S>,
     ) -> Result<(), serde_json::Error> {
         self.submachine.handle_response(data)?;
-        let mut issues_out = Vec::new();
         for iwl in self
             .submachine
             .get_output()
             .into_iter()
             .flat_map(|pr| pr.items)
         {
-            shared.report.open_issues += 1;
+            self.open_issues += 1;
             if let Some(q) = iwl.more_labels_query(shared.limits.label_page_size) {
-                shared.report.issues_with_extra_labels += 1;
                 self.label_queries.push(q);
                 self.issues_needing_labels.insert(iwl.issue_id, iwl.issue);
             } else {
-                issues_out.push(iwl.issue);
+                shared.results.push(iwl.issue);
             }
-        }
-        if !issues_out.is_empty() {
-            shared.results.push(Output::Issues(issues_out));
         }
         Ok(())
     }
@@ -338,12 +358,13 @@ struct FetchLabels {
     /// An inner `QueryMachine` for performing the queries for this state
     submachine: BatchPaginator<Id, GetLabels>,
 
-    /// The time at which this state began
-    start: Instant,
-
     /// A collection of all issues fetched that have more than one page of
     /// labels, keyed by issue ID
     issues_needing_labels: HashMap<Id, Issue>,
+
+    /// Total number of labels fetched so far that required extra queries to
+    /// retrieve
+    extra_labels: usize,
 }
 
 impl FetchLabels {
@@ -356,20 +377,20 @@ impl FetchLabels {
     ///
     /// `issues_needing_labels` is a collection of all issues that have more
     /// than one page of labels, keyed by issue ID.
-    fn start(
+    fn start<S: EventSubscriber>(
         label_queries: Vec<(Id, GetLabels)>,
         issues_needing_labels: HashMap<Id, Issue>,
-        shared: &mut Shared,
+        shared: &mut Shared<S>,
     ) -> (State, Option<QueryPayload>) {
         let mut submachine = BatchPaginator::new(label_queries, shared.limits.batch_size);
         if let query @ Some(_) = submachine.get_next_query() {
-            shared.transition(Transition::StartFetchLabels {
-                issues_with_extra_labels: shared.report.issues_with_extra_labels,
+            shared.subscriber.handle_event(Event::StartFetchLabels {
+                issues_with_extra_labels: issues_needing_labels.len(),
             });
             let state = FetchLabels {
                 submachine,
-                start: Instant::now(),
                 issues_needing_labels,
+                extra_labels: 0,
             }
             .into();
             (state, query)
@@ -380,29 +401,31 @@ impl FetchLabels {
 }
 
 impl MachineState for FetchLabels {
-    fn get_next_query(mut self, shared: &mut Shared) -> (State, Option<QueryPayload>) {
+    fn get_next_query<S: EventSubscriber>(
+        mut self,
+        shared: &mut Shared<S>,
+    ) -> (State, Option<QueryPayload>) {
         if let query @ Some(_) = self.submachine.get_next_query() {
             (self.into(), query)
         } else {
-            shared.transition(Transition::EndFetchLabels {
-                extra_labels: shared.report.extra_labels,
-                elapsed: self.start.elapsed(),
+            shared.subscriber.handle_event(Event::EndFetchLabels {
+                extra_labels: self.extra_labels,
             });
-            shared.results.push(Output::Issues(
-                self.issues_needing_labels.into_values().collect(),
-            ));
+            shared
+                .results
+                .extend(self.issues_needing_labels.into_values());
             Done::start(shared)
         }
     }
 
-    fn handle_response(
+    fn handle_response<S: EventSubscriber>(
         &mut self,
         data: JsonMap,
-        shared: &mut Shared,
+        _shared: &mut Shared<S>,
     ) -> Result<(), serde_json::Error> {
         self.submachine.handle_response(data)?;
         for res in self.submachine.get_output() {
-            shared.report.extra_labels += res.items.len();
+            self.extra_labels += res.items.len();
             self.issues_needing_labels
                 .get_mut(&res.key)
                 .expect("Issues we get labels for should have already been seen")
@@ -421,23 +444,25 @@ impl MachineState for FetchLabels {
 struct Done;
 
 impl Done {
-    /// Transition to this state and push the [`FetchReport`] into
-    /// `shared.results`
-    fn start(shared: &mut Shared) -> (State, Option<QueryPayload>) {
-        shared.results.push(Output::Report(shared.report));
+    /// Transition to this state
+    fn start<S: EventSubscriber>(shared: &mut Shared<S>) -> (State, Option<QueryPayload>) {
+        shared.subscriber.handle_event(Event::Done);
         (Done.into(), None)
     }
 }
 
 impl MachineState for Done {
-    fn get_next_query(self, _shared: &mut Shared) -> (State, Option<QueryPayload>) {
+    fn get_next_query<S: EventSubscriber>(
+        self,
+        _shared: &mut Shared<S>,
+    ) -> (State, Option<QueryPayload>) {
         (self.into(), None)
     }
 
-    fn handle_response(
+    fn handle_response<S: EventSubscriber>(
         &mut self,
         _data: JsonMap,
-        _shared: &mut Shared,
+        _shared: &mut Shared<S>,
     ) -> Result<(), serde_json::Error> {
         panic!("handle_response() called after machine completed")
     }
@@ -452,14 +477,17 @@ impl MachineState for Done {
 struct Error;
 
 impl MachineState for Error {
-    fn get_next_query(self, _shared: &mut Shared) -> (State, Option<QueryPayload>) {
+    fn get_next_query<S: EventSubscriber>(
+        self,
+        _shared: &mut Shared<S>,
+    ) -> (State, Option<QueryPayload>) {
         panic!("get_next_query() called after machine errored")
     }
 
-    fn handle_response(
+    fn handle_response<S: EventSubscriber>(
         &mut self,
         _data: JsonMap,
-        _shared: &mut Shared,
+        _shared: &mut Shared<S>,
     ) -> Result<(), serde_json::Error> {
         panic!("handle_response() called after machine errored")
     }
@@ -479,44 +507,44 @@ pub(crate) struct QueryLimits {
     pub(crate) label_page_size: NonZeroUsize,
 }
 
-/// Output values produced by `OrgsThenIssues`
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub(crate) enum Output {
-    /// An announcement of a state transition, marking the start or end of a
-    /// state
-    Transition(Transition),
-
-    /// A collection of issues whose data has been fully fetched
-    Issues(Vec<Issue>),
-
-    /// A report on how many things were retrieved from the server
-    Report(FetchReport),
+/// A trait for subscribers for receiving information about state transitions
+/// and fetched resources from an `OrgsThenIssues`
+pub(crate) trait EventSubscriber {
+    fn handle_event(&mut self, ev: Event);
 }
 
-/// Information on how many of each type of thing were retrieved from the
-/// server
-#[derive(Clone, Copy, Debug, Default, Eq, PartialEq, Serialize)]
-pub(crate) struct FetchReport {
-    /// Total number of repositories retrieved
-    repositories: usize,
+impl EventSubscriber for () {
+    fn handle_event(&mut self, _ev: Event) {}
+}
 
-    /// Total number of open issues retrieved
-    open_issues: usize,
-
-    /// Number of repositories retrieved that had open issues
-    repos_with_open_issues: usize,
-
-    /// Number of issues retrieved that required extra queries to fetch all
-    /// labels
-    issues_with_extra_labels: usize,
-
-    /// Total number of labels that required extra queries to retrieve
-    extra_labels: usize,
+impl<S: EventSubscriber> EventSubscriber for Option<S> {
+    fn handle_event(&mut self, ev: Event) {
+        if let Some(s) = self.as_mut() {
+            s.handle_event(ev);
+        }
+    }
 }
 
 /// An announcement of a state transition, marking the start or end of a state
+/// or operations as a whole.
+///
+/// During the lifetime of an `OrgsThenIssues`, events are always passed to an
+/// `EventSubscriber` in the order that they are defined here, with the
+/// following exceptions:
+///
+/// - Some pairs of "start" and "end" events may be skipped if there is no need
+///   to enter the associated states
+///
+/// - An `Error` event may occur at any point between `Start` & `Done` and will
+///   likely result in the most recent "start" event not receiving a paired
+///   "end" event
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum Transition {
+pub(crate) enum Event {
+    /// Querying has started.
+    ///
+    /// This is always the first event emitted.
+    Start,
+
     /// The [`FetchRepos`] state has started
     StartFetchRepos,
 
@@ -527,24 +555,15 @@ pub(crate) enum Transition {
 
         /// Number of repositories with open issues retrieved
         repos_with_open_issues: usize,
-
-        /// Time elapsed since the start of the [`FetchRepos`] state
-        elapsed: Duration,
     },
 
     /// The [`FetchIssues`] state has started
-    StartFetchIssues {
-        /// Number of repositories with open issues to retrieve issues from
-        repos_with_open_issues: usize,
-    },
+    StartFetchIssues,
 
     /// The [`FetchIssues`] state has finished
     EndFetchIssues {
         /// Number of open issues retrieved
         open_issues: usize,
-
-        /// Time elapsed since the start of the [`FetchIssues`] state
-        elapsed: Duration,
     },
 
     /// The [`FetchLabels`] state has started
@@ -557,48 +576,17 @@ pub(crate) enum Transition {
     EndFetchLabels {
         /// Total number of labels that required extra queries to retrieve
         extra_labels: usize,
-
-        /// Time elapsed since the start of the [`FetchLabels`] state
-        elapsed: Duration,
     },
-}
 
-impl fmt::Display for Transition {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Transition::StartFetchRepos => write!(f, "Fetching repositories …"),
-            Transition::EndFetchRepos {
-                repositories,
-                repos_with_open_issues,
-                elapsed,
-            } => write!(
-                f,
-                "Fetched {repositories} repositories ({repos_with_open_issues} with open issues) in {elapsed:?}"
-            ),
-            Transition::StartFetchIssues {
-                repos_with_open_issues,
-            } => {
-                write!(
-                    f,
-                    "Fetching issues for {repos_with_open_issues} repositories …"
-                )
-            }
-            Transition::EndFetchIssues {
-                open_issues,
-                elapsed,
-            } => write!(f, "Fetched {open_issues} issues in {elapsed:?}"),
-            Transition::StartFetchLabels {
-                issues_with_extra_labels,
-            } => write!(
-                f,
-                "Fetching more labels for {issues_with_extra_labels} issues …"
-            ),
-            Transition::EndFetchLabels {
-                extra_labels,
-                elapsed,
-            } => write!(f, "Fetched {extra_labels} more labels in {elapsed:?}"),
-        }
-    }
+    /// Querying has completed successfully.
+    ///
+    /// No more events will be emitted after this event.
+    Done,
+
+    /// A `handle_response()` method returned an error.
+    ///
+    /// No more events will be emitted after this event.
+    Error,
 }
 
 #[cfg(test)]
