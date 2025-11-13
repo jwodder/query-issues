@@ -1,0 +1,29 @@
+[package]
+name = "repos-and-issues"
+edition.workspace = true
+rust-version.workspace = true
+description = "Measure time to fetch repositories and open GitHub issues via GraphQL"
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+enum_dispatch.workspace = true
+gqlient = { path = "../gqlient" }
+humantime.workspace = true
+indoc.workspace = true
+patharg.workspace = true
+serde.workspace = true
+serde-jsonlines.workspace = true
+serde_json.workspace = true
+
+[build-dependencies]
+anyhow.workspace = true
+
+[dev-dependencies]
+pretty_assertions.workspace = true
+
+[lints]
+workspace = true

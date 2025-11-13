@@ -19,6 +19,12 @@ impl From<Id> for serde_json::Value {
     }
 }
 
+impl From<&str> for Id {
+    fn from(value: &str) -> Id {
+        Id(value.to_owned())
+    }
+}
+
 /// A GraphQL pagination cursor
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(transparent)]
