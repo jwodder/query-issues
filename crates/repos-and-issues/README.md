@@ -20,7 +20,7 @@ queried in batches at this point.
 Usage
 =====
 
-    cargo run [--release] -p orgs-then-issues -- [<options>] <owner> ...
+    cargo run [--release] -p repos-and-issues -- [<options>] <owner> ...
 
 Fetch information on repositories owned by the given owner(s) and any open
 issues they contain.
