@@ -141,6 +141,9 @@ impl QueryField for GetIssuesQuery {
                             url
                             createdAt
                             updatedAt
+                            milestone {{
+                                title
+                            }}
                             labels (first: {label_page_size}) {{
                                 nodes {{
                                     name
@@ -204,6 +207,7 @@ impl QueryField for GetIssuesQuery {
                     created: ri.created_at,
                     updated: ri.updated_at,
                     labels: ri.labels.items.into_iter().map(|lb| lb.0).collect(),
+                    milestone: ri.milestone.map(|s| s.0),
                 },
                 labels_cursor: ri.labels.end_cursor,
                 has_more_labels: ri.labels.has_next_page,
@@ -280,6 +284,9 @@ pub(crate) struct Issue {
 
     /// The timestamp at which the issue was last modified
     pub(crate) updated: String,
+
+    /// The name of the milestone associated with the issue, if any
+    pub(crate) milestone: Option<String>,
 }
 
 /// The "raw" deserialized representation of the data queried by
@@ -301,4 +308,5 @@ struct RawIssue {
     url: String,
     created_at: String,
     updated_at: String,
+    milestone: Option<Singleton<String>>,
 }

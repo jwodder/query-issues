@@ -149,6 +149,9 @@ impl QueryField for GetIssuesQuery {
                             url
                             createdAt
                             updatedAt
+                            milestone {{
+                                title
+                            }}
                             labels (first: {label_page_size}) {{
                                 nodes {{
                                     name
