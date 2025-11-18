@@ -146,6 +146,9 @@ impl QueryField for GetOwnerReposQuery {
                                 url
                                 createdAt
                                 updatedAt
+                                milestone {{
+                                    title
+                                }}
                                 labels (first: {label_page_size}) {{
                                     nodes {{
                                         name

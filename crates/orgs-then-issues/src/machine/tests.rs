@@ -469,6 +469,9 @@ fn issues() {
                             url
                             createdAt
                             updatedAt
+                            milestone {
+                                title
+                            }
                             labels (first: 10) {
                                 nodes {
                                     name
@@ -502,6 +505,9 @@ fn issues() {
                             url
                             createdAt
                             updatedAt
+                            milestone {
+                                title
+                            }
                             labels (first: 10) {
                                 nodes {
                                     name
@@ -557,6 +563,7 @@ fn issues() {
                             "url": "https://example.github/octocat/repo1/issues/1",
                             "createdAt": "2020-01-01T00:00:00Z",
                             "updatedAt": "2020-01-01T00:00:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "bug"}
@@ -574,6 +581,7 @@ fn issues() {
                             "url": "https://example.github/octocat/repo1/issues/17",
                             "createdAt": "2020-02-01T00:00:00Z",
                             "updatedAt": "2021-01-01T00:00:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "question"},
@@ -592,6 +600,7 @@ fn issues() {
                             "url": "https://example.github/octocat/repo1/issues/42",
                             "createdAt": "2021-01-01T00:00:00Z",
                             "updatedAt": "2022-01-01T00:00:00Z",
+                            "milestone": {"title": "v2.0"},
                             "labels": {
                                 "nodes": [
                                     {"name": "enhancement"}
@@ -623,6 +632,7 @@ fn issues() {
                             "url": "https://example.github/achtkatze/repo3/issues/23",
                             "createdAt": "2020-06-15T12:34:56Z",
                             "updatedAt": "2020-06-15T12:34:56Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "german"},
@@ -642,6 +652,7 @@ fn issues() {
                             "url": "https://example.github/achtkatze/repo3/issues/24",
                             "createdAt": "2020-06-16T00:00:00Z",
                             "updatedAt": "2020-06-16T00:00:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "german"},
@@ -675,6 +686,7 @@ fn issues() {
                 url: "https://example.github/octocat/repo1/issues/1".into(),
                 created: "2020-01-01T00:00:00Z".into(),
                 updated: "2020-01-01T00:00:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "octocat/repo1".into(),
@@ -684,6 +696,7 @@ fn issues() {
                 url: "https://example.github/octocat/repo1/issues/17".into(),
                 created: "2020-02-01T00:00:00Z".into(),
                 updated: "2021-01-01T00:00:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "octocat/repo1".into(),
@@ -693,6 +706,7 @@ fn issues() {
                 url: "https://example.github/octocat/repo1/issues/42".into(),
                 created: "2021-01-01T00:00:00Z".into(),
                 updated: "2022-01-01T00:00:00Z".into(),
+                milestone: Some("v2.0".into()),
             },
             Issue {
                 repo: "achtkatze/repo3".into(),
@@ -702,6 +716,7 @@ fn issues() {
                 url: "https://example.github/achtkatze/repo3/issues/23".into(),
                 created: "2020-06-15T12:34:56Z".into(),
                 updated: "2020-06-15T12:34:56Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "achtkatze/repo3".into(),
@@ -711,6 +726,7 @@ fn issues() {
                 url: "https://example.github/achtkatze/repo3/issues/24".into(),
                 created: "2020-06-16T00:00:00Z".into(),
                 updated: "2020-06-16T00:00:00Z".into(),
+                milestone: None,
             },
         ]
     );
@@ -826,6 +842,9 @@ fn extra_labels() {
                             url
                             createdAt
                             updatedAt
+                            milestone {
+                                title
+                            }
                             labels (first: 5) {
                                 nodes {
                                     name
@@ -878,6 +897,7 @@ fn extra_labels() {
                         "url": "https://example.github/monocat/rainbow/issues/1",
                         "createdAt": "2020-01-01T00:00:00Z",
                         "updatedAt": "2020-01-01T00:00:00Z",
+                        "milestone": {"title": "Everything"},
                         "labels": {
                             "nodes": [
                                 {"name": "colors"},
@@ -989,6 +1009,7 @@ fn extra_labels() {
             url: "https://example.github/monocat/rainbow/issues/1".into(),
             created: "2020-01-01T00:00:00Z".into(),
             updated: "2020-01-01T00:00:00Z".into(),
+            milestone: Some("Everything".into()),
         }]
     );
 
@@ -1444,6 +1465,9 @@ fn multiple_pages() {
                             url
                             createdAt
                             updatedAt
+                            milestone {
+                                title
+                            }
                             labels (first: 5) {
                                 nodes {
                                     name
@@ -1477,6 +1501,9 @@ fn multiple_pages() {
                             url
                             createdAt
                             updatedAt
+                            milestone {
+                                title
+                            }
                             labels (first: 5) {
                                 nodes {
                                     name
@@ -1532,6 +1559,7 @@ fn multiple_pages() {
                             "url": "https://example.github/quadcat/example/issues/1",
                             "createdAt": "2020-01-01T00:00:00Z",
                             "updatedAt": "2020-01-01T00:00:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "example"},
@@ -1553,6 +1581,7 @@ fn multiple_pages() {
                             "url": "https://example.github/quadcat/example/issues/2",
                             "createdAt": "2020-02-14T23:46:10Z",
                             "updatedAt": "2020-02-14T23:46:10Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "example"},
@@ -1572,6 +1601,7 @@ fn multiple_pages() {
                             "url": "https://example.github/quadcat/example/issues/3",
                             "createdAt": "2020-07-10T18:38:04Z",
                             "updatedAt": "2020-07-10T18:38:04Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "example"},
@@ -1591,6 +1621,7 @@ fn multiple_pages() {
                             "url": "https://example.github/quadcat/example/issues/4",
                             "createdAt": "2022-04-29T07:51:44Z",
                             "updatedAt": "2022-04-29T07:51:44Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "example"},
@@ -1610,6 +1641,7 @@ fn multiple_pages() {
                             "url": "https://example.github/quadcat/example/issues/5",
                             "createdAt": "2022-11-22T19:10:13Z",
                             "updatedAt": "2022-11-22T19:10:13Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "example"},
@@ -1643,6 +1675,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/1",
                             "createdAt": "2020-01-01T00:00:00Z",
                             "updatedAt": "2020-01-01T00:00:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1661,6 +1694,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/2",
                             "createdAt": "2020-01-01T00:01:00Z",
                             "updatedAt": "2020-01-01T00:01:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1679,6 +1713,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/3",
                             "createdAt": "2020-01-01T00:02:00Z",
                             "updatedAt": "2020-01-01T00:02:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1697,6 +1732,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/4",
                             "createdAt": "2020-01-01T00:03:00Z",
                             "updatedAt": "2020-01-01T00:03:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1715,6 +1751,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/5",
                             "createdAt": "2020-01-01T00:04:00Z",
                             "updatedAt": "2020-01-01T00:04:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1761,6 +1798,9 @@ fn multiple_pages() {
                             url
                             createdAt
                             updatedAt
+                            milestone {
+                                title
+                            }
                             labels (first: 5) {
                                 nodes {
                                     name
@@ -1794,6 +1834,9 @@ fn multiple_pages() {
                             url
                             createdAt
                             updatedAt
+                            milestone {
+                                title
+                            }
                             labels (first: 5) {
                                 nodes {
                                     name
@@ -1840,6 +1883,7 @@ fn multiple_pages() {
                             "url": "https://example.github/quadcat/example/issues/6",
                             "createdAt": "2023-12-23T05:52:34Z",
                             "updatedAt": "2023-12-23T05:52:34Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "example"},
@@ -1873,6 +1917,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/6",
                             "createdAt": "2020-01-01T00:05:00Z",
                             "updatedAt": "2020-01-01T00:05:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1891,6 +1936,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/7",
                             "createdAt": "2020-01-01T00:06:00Z",
                             "updatedAt": "2020-01-01T00:06:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1909,6 +1955,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/8",
                             "createdAt": "2020-01-01T00:07:00Z",
                             "updatedAt": "2020-01-01T00:07:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1927,6 +1974,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/9",
                             "createdAt": "2020-01-01T00:08:00Z",
                             "updatedAt": "2020-01-01T00:08:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1945,6 +1993,7 @@ fn multiple_pages() {
                             "url": "https://example.github/ochocat/rainbow/issues/10",
                             "createdAt": "2020-01-01T00:09:00Z",
                             "updatedAt": "2020-01-01T00:09:00Z",
+                            "milestone": null,
                             "labels": {
                                 "nodes": [
                                     {"name": "colors"},
@@ -1982,6 +2031,7 @@ fn multiple_pages() {
                 url: "https://example.github/quadcat/example/issues/2".into(),
                 created: "2020-02-14T23:46:10Z".into(),
                 updated: "2020-02-14T23:46:10Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "quadcat/example".into(),
@@ -1995,6 +2045,7 @@ fn multiple_pages() {
                 url: "https://example.github/quadcat/example/issues/3".into(),
                 created: "2020-07-10T18:38:04Z".into(),
                 updated: "2020-07-10T18:38:04Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "quadcat/example".into(),
@@ -2008,6 +2059,7 @@ fn multiple_pages() {
                 url: "https://example.github/quadcat/example/issues/4".into(),
                 created: "2022-04-29T07:51:44Z".into(),
                 updated: "2022-04-29T07:51:44Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "quadcat/example".into(),
@@ -2017,6 +2069,7 @@ fn multiple_pages() {
                 url: "https://example.github/quadcat/example/issues/5".into(),
                 created: "2022-11-22T19:10:13Z".into(),
                 updated: "2022-11-22T19:10:13Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "quadcat/example".into(),
@@ -2026,6 +2079,7 @@ fn multiple_pages() {
                 url: "https://example.github/quadcat/example/issues/6".into(),
                 created: "2023-12-23T05:52:34Z".into(),
                 updated: "2023-12-23T05:52:34Z".into(),
+                milestone: None,
             },
         ]
     );
@@ -2052,6 +2106,9 @@ fn multiple_pages() {
                             url
                             createdAt
                             updatedAt
+                            milestone {
+                                title
+                            }
                             labels (first: 5) {
                                 nodes {
                                     name
@@ -2095,6 +2152,7 @@ fn multiple_pages() {
                         "url": "https://example.github/ochocat/rainbow/issues/11",
                         "createdAt": "2020-01-01T00:10:00Z",
                         "updatedAt": "2020-01-01T00:10:00Z",
+                        "milestone": null,
                         "labels": {
                             "nodes": [
                                 {"name": "colors"},
@@ -2130,6 +2188,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/1".into(),
                 created: "2020-01-01T00:00:00Z".into(),
                 updated: "2020-01-01T00:00:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2139,6 +2198,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/2".into(),
                 created: "2020-01-01T00:01:00Z".into(),
                 updated: "2020-01-01T00:01:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2148,6 +2208,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/3".into(),
                 created: "2020-01-01T00:02:00Z".into(),
                 updated: "2020-01-01T00:02:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2157,6 +2218,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/4".into(),
                 created: "2020-01-01T00:03:00Z".into(),
                 updated: "2020-01-01T00:03:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2166,6 +2228,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/5".into(),
                 created: "2020-01-01T00:04:00Z".into(),
                 updated: "2020-01-01T00:04:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2175,6 +2238,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/6".into(),
                 created: "2020-01-01T00:05:00Z".into(),
                 updated: "2020-01-01T00:05:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2184,6 +2248,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/7".into(),
                 created: "2020-01-01T00:06:00Z".into(),
                 updated: "2020-01-01T00:06:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2193,6 +2258,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/8".into(),
                 created: "2020-01-01T00:07:00Z".into(),
                 updated: "2020-01-01T00:07:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2202,6 +2268,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/9".into(),
                 created: "2020-01-01T00:08:00Z".into(),
                 updated: "2020-01-01T00:08:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "ochocat/rainbow".into(),
@@ -2211,6 +2278,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/10".into(),
                 created: "2020-01-01T00:09:00Z".into(),
                 updated: "2020-01-01T00:09:00Z".into(),
+                milestone: None,
             },
         ]
     );
@@ -2497,6 +2565,7 @@ fn multiple_pages() {
                 url: "https://example.github/ochocat/rainbow/issues/11".into(),
                 created: "2020-01-01T00:10:00Z".into(),
                 updated: "2020-01-01T00:10:00Z".into(),
+                milestone: None,
             },
             Issue {
                 repo: "quadcat/example".into(),
@@ -2518,6 +2587,7 @@ fn multiple_pages() {
                 url: "https://example.github/quadcat/example/issues/1".into(),
                 created: "2020-01-01T00:00:00Z".into(),
                 updated: "2020-01-01T00:00:00Z".into(),
+                milestone: None,
             },
         ]
     );
