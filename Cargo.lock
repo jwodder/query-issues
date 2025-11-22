@@ -256,6 +256,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "githash"
+version = "0.0.0"
+dependencies = [
+ "anyhow",
+]
+
+[[package]]
 name = "gqlient"
 version = "0.0.0"
 dependencies = [
@@ -509,6 +516,7 @@ dependencies = [
  "anyhow",
  "clap",
  "enum_dispatch",
+ "githash",
  "gqlient",
  "humantime",
  "indoc",
@@ -526,6 +534,7 @@ dependencies = [
  "anyhow",
  "clap",
  "enum_dispatch",
+ "githash",
  "gqlient",
  "humantime",
  "indoc",
@@ -602,6 +611,7 @@ dependencies = [
  "anyhow",
  "clap",
  "enum_dispatch",
+ "githash",
  "gqlient",
  "humantime",
  "indoc",
