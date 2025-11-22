@@ -21,6 +21,7 @@ serde_json.workspace = true
 
 [build-dependencies]
 anyhow.workspace = true
+githash = { path = "../githash" }
 
 [dev-dependencies]
 pretty_assertions.workspace = true

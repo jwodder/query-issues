@@ -1,0 +1,14 @@
+[package]
+name = "githash"
+edition.workspace = true
+rust-version.workspace = true
+description = "Fetch Git revision hash"
+authors.workspace = true
+repository.workspace = true
+license.workspace = true
+
+[dependencies]
+anyhow.workspace = true
+
+[lints]
+workspace = true
