@@ -38,7 +38,7 @@ pub fn get_work_tree() -> anyhow::Result<Option<String>> {
     }
 }
 
-pub fn get_commit_hash<P: AsRef<Path>>(work_tree: P) -> anyhow::Result<Option<String>> {
+pub fn get_commit_hash<P: AsRef<Path>>(work_tree: P) -> anyhow::Result<String> {
     let output = Command::new("git")
         .arg("rev-parse")
         .arg("--short")
@@ -56,5 +56,5 @@ pub fn get_commit_hash<P: AsRef<Path>>(work_tree: P) -> anyhow::Result<Option<St
         .context("`git rev-parse --short HEAD` output was not UTF-8")?
         .trim()
         .to_owned();
-    Ok(Some(revision))
+    Ok(revision)
 }
