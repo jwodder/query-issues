@@ -30,20 +30,20 @@ limit points used.
 
 ### Options
 
-- `-B <int>`/`--batch-size <int>` — Set the number of sub-queries to make per
+- `-B INT`/`--batch-size INT` — Set the number of sub-queries to make per
   GraphQL request [default: 50]
 
-- `-L <int>`/`--label-page-size <int>` — Set the number of labels to request
-  per page [default: 10]
+- `-L INT`/`--label-page-size INT` — Set the number of labels to request per
+  page [default: 10]
 
-- `-o <path>`/`--outfile <path>` — Dump fetched issue information to the given
-  file as JSON Lines.  `<path>` may be `-` to write to standard output.
+- `-o PATH`/`--outfile PATH` — Dump fetched issue information to the given file
+  as JSON Lines.  `PATH` may be `-` to write to standard output.
 
-- `-P <int>`/`--page-size <int>` — Set the number of items to request per page
-  of results [default: 100]
+- `-P INT`/`--page-size INT` — Set the number of items to request per page of
+  results [default: 100]
 
-- `-R <path>`/`--report-file <path>` — Append a report of the run to the given
-  file as a JSON Lines entry
+- `-R PATH`/`--report-file PATH` — Append a report of the run to the given file
+  as a JSON Lines entry
 
 
 Authentication
