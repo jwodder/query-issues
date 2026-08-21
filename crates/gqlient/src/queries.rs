@@ -230,7 +230,7 @@ impl<K, P: Paginator> QueryMachine for BatchPaginator<K, P> {
     }
 
     fn get_output(&mut self) -> Vec<Self::Output> {
-        self.results.drain(..).collect()
+        std::mem::take(&mut self.results)
     }
 }
 

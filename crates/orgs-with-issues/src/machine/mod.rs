@@ -83,7 +83,7 @@ impl<S: EventSubscriber> QueryMachine for OrgsWithIssues<S> {
     }
 
     fn get_output(&mut self) -> Vec<Issue> {
-        self.shared.results.drain(..).collect()
+        std::mem::take(&mut self.shared.results)
     }
 }
 
