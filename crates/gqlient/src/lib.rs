@@ -52,6 +52,10 @@ impl Client {
             .middleware(
                 move |mut req: Request<SendBody<'_>>, next: MiddlewareNext<'_>| {
                     let _ = req.headers_mut().insert("Authorization", auth.clone());
+                    let _ = req.headers_mut().insert(
+                        "X-GitHub-Api-Version",
+                        HeaderValue::from_static("2026-03-10"),
+                    );
                     let _ = req
                         .headers_mut()
                         .insert("X-Github-Next-Global-ID", HeaderValue::from_static("1"));
