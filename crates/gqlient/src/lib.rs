@@ -319,5 +319,21 @@ struct GqlInnerError {
     err_type: Option<String>,
     message: String,
     #[serde(default)]
-    path: Option<Vec<String>>,
+    path: Option<Vec<StringOrInt>>,
+}
+
+#[derive(Clone, Deserialize, Eq, PartialEq)]
+#[serde(untagged)]
+enum StringOrInt {
+    Str(String),
+    Int(u64),
+}
+
+impl fmt::Debug for StringOrInt {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            StringOrInt::Str(s) => write!(f, "{s:?}"),
+            StringOrInt::Int(i) => write!(f, "{i:?}"),
+        }
+    }
 }
