@@ -4,13 +4,20 @@ mod types;
 use crate::machine::{Event, EventSubscriber, OrgsWithIssues, QueryLimits};
 use anyhow::Context;
 use clap::Parser;
-use gqlient::{Client, DEFAULT_BATCH_SIZE};
+use gqlient::Client;
 use serde::Serialize;
 use serde_jsonlines::{WriteExt, append_json_lines};
 use std::io::Write;
 use std::num::NonZeroUsize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant, SystemTime};
+
+// As of September 2026, orgs-with-issues needs to use smaller default query
+// limits than the other programs lest it get a RESOURCE_LIMITS_EXCEEDED error;
+// cf.
+// <https://github.blog/changelog/2025-09-01-graphql-api-resource-limits/>.
+const DEFAULT_BATCH_SIZE: NonZeroUsize = NonZeroUsize::new(10).unwrap();
+const DEFAULT_PAGE_SIZE: NonZeroUsize = NonZeroUsize::new(50).unwrap();
 
 /// Measure time to fetch open GitHub issues via GraphQL
 #[derive(Clone, Debug, Eq, Parser, PartialEq)]
@@ -28,7 +35,7 @@ struct Arguments {
     outfile: Option<patharg::OutputArg>,
 
     /// Number of items to request per page of results
-    #[arg(short = 'P', long, default_value = "100")]
+    #[arg(short = 'P', long, default_value_t = DEFAULT_PAGE_SIZE)]
     page_size: NonZeroUsize,
 
     /// Append a run report to the given file

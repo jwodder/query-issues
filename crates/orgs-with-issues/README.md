@@ -31,7 +31,7 @@ limit points used.
 ### Options
 
 - `-B INT`/`--batch-size INT` — Set the number of sub-queries to make per
-  GraphQL request [default: 50]
+  GraphQL request [default: 10]
 
 - `-L INT`/`--label-page-size INT` — Set the number of labels to request per
   page [default: 10]
@@ -40,7 +40,7 @@ limit points used.
   as JSON Lines.  `PATH` may be `-` to write to standard output.
 
 - `-P INT`/`--page-size INT` — Set the number of items to request per page of
-  results [default: 100]
+  results [default: 50]
 
 - `-R PATH`/`--report-file PATH` — Append a report of the run to the given file
   as a JSON Lines entry
