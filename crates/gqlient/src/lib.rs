@@ -158,6 +158,7 @@ impl<Q: QueryMachine> Iterator for MachineRunner<'_, Q> {
                 match self.client.query(payload) {
                     Ok(data) => {
                         if let Err(e) = self.query.handle_response(data) {
+                            self.query_done = true;
                             return Some(Err(e.into()));
                         }
                     }
