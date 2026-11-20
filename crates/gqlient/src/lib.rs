@@ -7,21 +7,6 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::num::NonZeroUsize;
 use thiserror::Error;
-use ureq::{
-    Agent, SendBody,
-    http::{
-        Request,
-        header::{HeaderValue, InvalidHeaderValue},
-    },
-    middleware::MiddlewareNext,
-};
-
-/// The URL to which GitHub GraphQL queries are sent
-static GRAPHQL_API_URL: &str = "https://api.github.com/graphql";
-
-/// The URL to which GitHub REST API requests for rate limit information are
-/// sent
-static RATE_LIMIT_URL: &str = "https://api.github.com/rate_limit";
 
 /// The [`Client`]'s "User-Agent" header value
 static USER_AGENT: &str = concat!(
@@ -39,32 +24,18 @@ pub const DEFAULT_BATCH_SIZE: NonZeroUsize = NonZeroUsize::new(50).unwrap();
 /// A client for performing requests to the GitHub GraphQL API
 #[derive(Clone, Debug)]
 pub struct Client {
-    inner: Agent,
+    inner: minigh::Client,
 }
 
 impl Client {
     /// Create a new client instance using the given GitHub access token
     pub fn new(token: &str) -> Result<Client, BuildClientError> {
-        let auth = HeaderValue::from_str(&format!("Bearer {token}"))?;
-        let inner = Agent::config_builder()
-            .https_only(true)
-            .user_agent(USER_AGENT)
-            .middleware(
-                move |mut req: Request<SendBody<'_>>, next: MiddlewareNext<'_>| {
-                    let _ = req.headers_mut().insert("Authorization", auth.clone());
-                    let _ = req.headers_mut().insert(
-                        "X-GitHub-Api-Version",
-                        HeaderValue::from_static("2026-03-10"),
-                    );
-                    let _ = req
-                        .headers_mut()
-                        .insert("X-Github-Next-Global-ID", HeaderValue::from_static("1"));
-                    next.handle(req)
-                },
-            )
-            .build()
-            .into();
-        Ok(Client { inner })
+        Ok(Client {
+            inner: minigh::Client::builder()
+                .with_token(token)
+                .with_user_agent(USER_AGENT)
+                .build()?,
+        })
     }
 
     /// Fetch the local user's GitHub access token with [`gh_token`] and use it
@@ -76,31 +47,19 @@ impl Client {
 
     /// Get the current details on the GraphQL API rate limit for the
     /// authenticated user
-    pub fn get_rate_limit(&self) -> Result<RateLimit, RateLimitError> {
-        let bytes = self
+    pub fn get_rate_limit(&self) -> Result<RateLimit, minigh::RequestError> {
+        Ok(self
             .inner
-            .get(RATE_LIMIT_URL)
-            .call()
-            .map_err(|e| RateLimitError::Http(Box::new(e)))?
-            .into_body()
-            .read_to_vec()
-            .map_err(|e| RateLimitError::Read(Box::new(e)))?;
-        let r = serde_json::from_slice::<RateLimitResponse>(&bytes)?;
-        Ok(r.resources.graphql)
+            .get::<RateLimitResponse>("/rate_limit")?
+            .resources
+            .graphql)
     }
 
     /// Perform a GraphQL query and return its deserialized response data on
     /// success
     pub fn query(&self, payload: QueryPayload) -> Result<JsonMap, QueryError> {
-        let bytes = self
-            .inner
-            .post(GRAPHQL_API_URL)
-            .send_json(payload)
-            .map_err(|e| QueryError::Http(Box::new(e)))?
-            .into_body()
-            .read_to_vec()
-            .map_err(|e| QueryError::Read(Box::new(e)))?;
-        serde_json::from_slice::<Response>(&bytes)?
+        self.inner
+            .graphql::<_, Response>(&payload.query, &payload.variables)?
             .into_data()
             .map_err(Into::into)
     }
@@ -182,35 +141,23 @@ impl<Q: QueryMachine> Iterator for MachineRunner<'_, Q> {
 
 #[derive(Debug, Error)]
 pub enum BuildClientError {
-    #[error("invalid authorization token")]
-    Auth(#[from] InvalidHeaderValue),
+    #[error(transparent)]
+    Inner(#[from] minigh::BuildClientError),
     #[error("failed to fetch GitHub access token")]
     GetToken(#[from] gh_token::Error),
 }
 
 #[derive(Debug, Error)]
-pub enum RateLimitError {
-    #[error("failed to perform rate limit request")]
-    Http(#[source] Box<ureq::Error>),
-    #[error("failed to read rate limit response")]
-    Read(#[source] Box<ureq::Error>),
-    #[error("failed to deserialize rate limit response")]
-    Json(#[from] serde_json::Error),
-}
-
-#[derive(Debug, Error)]
 pub enum QueryError {
-    #[error("failed to perform GraphQL request")]
-    Http(#[source] Box<ureq::Error>),
-    #[error("failed to read GraphQL response")]
-    Read(#[source] Box<ureq::Error>),
+    #[error(transparent)]
+    Request(#[from] minigh::RequestError),
     #[error("failed to deserialize GraphQL response")]
     Json(#[from] serde_json::Error),
     #[error("GraphQL server returned error response")]
     GraphQL(#[from] GqlError),
 }
 
-/// Structure returned for requests to [`RATE_LIMIT_URL`]
+/// Structure returned by `get_rate_limit()`
 // This can't be replaced with Singleton because the JSON contains more than
 // one field.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
